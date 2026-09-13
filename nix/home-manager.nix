@@ -44,7 +44,6 @@ in
         KeepAlive.SuccessfulExit = false;
         ThrottleInterval = 30;
         ExitTimeOut = 80;
-        ProcessType = "Background";
         StandardOutPath = "${stateDir}/service.log";
         StandardErrorPath = "${stateDir}/service.log";
       };
