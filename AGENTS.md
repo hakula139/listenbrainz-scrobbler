@@ -31,7 +31,14 @@ uv run ruff format --check .
 uv run mypy src/lb_scrobbler
 uv run pytest -q
 pre-commit run --all-files
+uv build
 nix flake check
 ```
 
-Use focused checks while iterating. `nix flake check` builds the package and Home Manager activation script on macOS but does not activate the service or test Music access. For changes to Music observation, validate streamed playback outside the library and background Automation access separately on macOS. See [README.md](README.md) for setup, operation, and release procedures.
+For checkout-based development, prefix CLI commands with `uv run`, for example `uv run lb-scrobbler probe`. Installing an agent from the checkout records its `.venv` Python path, so keep that environment in place and rerun `install` after recreating or moving it.
+
+CI runs hooks and locked Python checks on Linux and macOS. Tests cover playback thresholds, interruptions, repeats, restart persistence, and HTTP retries without contacting ListenBrainz. Use focused checks while iterating. `nix flake check` builds the package and Home Manager activation script on macOS but does not activate the service or test Music access. For changes to Music observation, validate streamed playback outside the library and background Automation access separately on macOS. See [README.md](README.md) for setup and operation.
+
+## Releases
+
+To release, update the package version in `pyproject.toml` and the submission client version in `src/lb_scrobbler/tracking.py`, refresh `uv.lock`, and commit after checks pass. Push an annotated `v<version>` tag with the release notes in its annotation. The release workflow reruns Linux and macOS CI, checks that the tag matches the package version, builds the distributions, and publishes their checksums and the tag's notes to GitHub. A separate job verifies the released checksums and publishes those same files to PyPI through Trusted Publishing. To publish an existing GitHub release, run the Release workflow manually with its tag. The PyPI publisher must match this repository, `release.yml`, and the `pypi` GitHub environment.
