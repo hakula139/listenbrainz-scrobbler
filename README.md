@@ -79,4 +79,4 @@ Home Manager replaces the manual installer's LaunchAgent under the same label wh
 
 The LaunchAgent starts at user login after a reboot, when Music and the login Keychain are available. Home Manager owns its lifecycle after migration, so use it for configuration changes instead of the manual `install` and `uninstall` commands. After changing the token, restart the loaded agent with `launchctl kickstart -k "gui/$(id -u)/xyz.hakula.listenbrainz-scrobbler"`. Disable the module and reactivate Home Manager to remove it. The existing Keychain entry keeps credentials outside the Nix store.
 
-[GitHub releases](https://github.com/hakula139/listenbrainz-scrobbler/releases) also provide wheels, source archives, and checksums. For development checks and release procedures, see [AGENTS.md](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/AGENTS.md).
+See the [changelog](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/CHANGELOG.md) for release changes. [GitHub releases](https://github.com/hakula139/listenbrainz-scrobbler/releases) also provide wheels, source archives, and checksums.

@@ -136,6 +136,7 @@
         # ----------------------------------------------------------------------
         devShells.default = pkgs.mkShell {
           packages = preCommitCheck.enabledPackages ++ [
+            pkgs.git-cliff
             pkgs.python313
             pkgs.uv
           ];
