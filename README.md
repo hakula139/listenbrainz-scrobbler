@@ -80,3 +80,9 @@ Home Manager replaces the manual installer's LaunchAgent under the same label wh
 The LaunchAgent starts at user login after a reboot, when Music and the login Keychain are available. Home Manager owns its lifecycle after migration. Disable the module and reactivate Home Manager to remove it. The existing Keychain entry keeps credentials outside the Nix store.
 
 The development shell generates pre-commit configuration from the flake and installs the Git hooks. CI checks hooks and locked Python dependencies on Linux and macOS, and builds the package and a Home Manager configuration on macOS. The Home Manager check builds the activation script without activating it.
+
+## Releases
+
+GitHub releases provide a Python wheel, source distribution, and SHA-256 checksums. The same version tag is a Nix flake reference, for example `github:hakula139/listenbrainz-scrobbler/v0.1.0`. Pin that reference when adding the Home Manager module to another flake.
+
+To release, update the package version in `pyproject.toml` and the submission client version in `tracking.py`, refresh `uv.lock`, and commit after checks pass. Push an annotated `v<version>` tag with the release notes in its annotation. The release workflow reruns Linux and macOS CI, checks that the tag matches the package version, builds the distributions, and publishes their checksums and the tag's notes to GitHub. It does not publish to PyPI.

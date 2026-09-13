@@ -54,6 +54,7 @@
         preCommitCheck = git-hooks-nix.lib.${system}.run {
           src = ./.;
           hooks = {
+            actionlint.enable = true;
             check-added-large-files.enable = true;
             check-yaml.enable = true;
             end-of-file-fixer.enable = true;

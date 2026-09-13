@@ -2,8 +2,13 @@
 name = "listenbrainz-scrobbler"
 version = "0.1.0"
 description = "A background Apple Music scrobbler for ListenBrainz on macOS"
+readme = "README.md"
 requires-python = ">=3.13"
 dependencies = ["httpx>=0.27", "keyring>=25"]
+
+[project.urls]
+Repository = "https://github.com/hakula139/listenbrainz-scrobbler"
+Issues = "https://github.com/hakula139/listenbrainz-scrobbler/issues"
 
 [project.scripts]
 lb-scrobbler = "lb_scrobbler.cli:main"
