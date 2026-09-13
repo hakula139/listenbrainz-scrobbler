@@ -44,6 +44,11 @@ class Tracker:
         self.session = session
 
     def observe(self, current: Sample, now: float) -> dict | None:
+        if current.state == 'unavailable':
+            if self.session:
+                self.session.sample.state = 'unavailable'
+                self.session.observed_at = now
+            return None
         if current.state not in ('playing', 'paused') or not (
             current.title and current.artist and current.duration > 0
         ):

@@ -109,3 +109,19 @@ def test_blocked_payload_is_retained_for_manual_retry(tmp_path):
     store.retry()
     assert store.next(2000)[0] == tracker.session.id
     store.close()
+
+
+def test_transient_read_failure_preserves_qualified_session():
+    tracker = Tracker()
+    play(tracker)
+    tracker.observe(Sample('unavailable'), 1052)
+    assert play(tracker, start=54, end=98) == []
+    assert tracker.session.queued
+
+
+def test_transient_read_failure_does_not_credit_the_gap():
+    tracker = Tracker()
+    play(tracker, end=10)
+    tracker.observe(Sample('unavailable'), 1012)
+    tracker.observe(sample(18), 1018)
+    assert tracker.session.seconds == 10
