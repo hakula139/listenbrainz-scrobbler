@@ -16,7 +16,11 @@ build-backend = "hatchling.build"
 packages = ["src/lb_scrobbler"]
 
 [dependency-groups]
-dev = ["ruff>=0.15", "pytest>=8"]
+dev = [
+    "ruff>=0.15",
+    "pytest>=8",
+    "pre-commit>=4.6.2",
+]
 
 [tool.ruff]
 target-version = "py312"
