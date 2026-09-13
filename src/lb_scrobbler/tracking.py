@@ -77,7 +77,7 @@ class Session:
                     'duration_ms': round(self.sample.duration * 1000),
                     'media_player': 'Apple Music',
                     'submission_client': 'listenbrainz-scrobbler',
-                    'submission_client_version': '0.1.0',
+                    'submission_client_version': '0.1.1',
                 },
             },
         }
