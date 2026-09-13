@@ -4,38 +4,48 @@ A background service that submits Apple Music playback on macOS to ListenBrainz.
 
 ## Setup
 
-Install Python 3.13 or newer and [uv](https://docs.astral.sh/uv/), then run from this checkout:
+On macOS, install [uv](https://docs.astral.sh/uv/), then install the [PyPI package](https://pypi.org/project/listenbrainz-scrobbler/) with Python 3.13:
 
 ```sh
-uv sync --locked
-uv run lb-scrobbler install --dry-run
-uv run lb-scrobbler status
+uv tool install --python 3.13 listenbrainz-scrobbler
+lb-scrobbler install --dry-run
+lb-scrobbler status
 ```
+
+If uv reports that its executable directory is missing from `PATH`, run `uv tool update-shell` and restart your shell. For a declaratively managed service, use [Nix / Home Manager](#nix--home-manager).
 
 Allow the Python process to control Music when macOS asks. Terminal's Automation permission applies to a foreground probe, so the LaunchAgent may need a separate grant. The first query waits up to a minute for consent. If access is denied, enable it in System Settings → Privacy & Security → Automation, then reinstall the agent. `status` shows the observation age, current track, observed playback seconds, and any read error. Confirm the observations stay fresh and the position advances while playing.
 
 After the dry run works, quit other scrobblers to avoid duplicate submissions. Save your [ListenBrainz token](https://listenbrainz.org/settings/) in the login Keychain:
 
 ```sh
-uv run lb-scrobbler auth
-uv run lb-scrobbler install
+lb-scrobbler auth
+lb-scrobbler install
 ```
 
-For an existing SmashTunes setup, `uv run lb-scrobbler auth --from-smashtunes` explicitly transfers its stored ListenBrainz token into this service's Keychain entry after validating it. Neither command prints the token. Do not put tokens in command arguments, project files, or Git.
+For an existing SmashTunes setup, `lb-scrobbler auth --from-smashtunes` explicitly transfers its stored ListenBrainz token into this service's Keychain entry after validating it. Neither command prints the token. Do not put tokens in command arguments, project files, or Git.
 
-`install` starts the service immediately and at future logins. It records the current virtual environment's Python path, so keep the checkout and `.venv` in place. Rerun `install` after moving the project or recreating the environment. Updating the underlying Python executable may require fresh macOS Automation or Keychain consent.
+`install` starts the service immediately and at future logins. It records the installed environment's Python path, so keep the uv tool installation in place while using the service. Use `uv tool install` for this persistent environment. A temporary `uvx` environment can be removed by cache cleanup. Updating the underlying Python executable may require fresh macOS Automation or Keychain consent.
+
+To upgrade, restart the agent against the updated tool environment:
+
+```sh
+lb-scrobbler stop
+uv tool upgrade listenbrainz-scrobbler
+lb-scrobbler install
+```
 
 ## Operation
 
 ```sh
-uv run lb-scrobbler probe       # Read Music without submitting
-uv run lb-scrobbler status      # Last observation and submission queue
-uv run lb-scrobbler stop        # Stop until reinstalled or the next login
-uv run lb-scrobbler uninstall   # Remove the launch agent
-uv run lb-scrobbler retry       # Retry retained failures after fixing their cause
+lb-scrobbler probe       # Read Music without submitting
+lb-scrobbler status      # Last observation and submission queue
+lb-scrobbler stop        # Stop until reinstalled or the next login
+lb-scrobbler uninstall   # Remove the launch agent
+lb-scrobbler retry       # Retry retained failures after fixing their cause
 ```
 
-`uv run lb-scrobbler run --dry-run` runs in the foreground. Stop the LaunchAgent first, since only one process may own the playback tracker.
+`lb-scrobbler run --dry-run` runs in the foreground. Stop the LaunchAgent first, since only one process may own the playback tracker.
 
 State and logs live in `~/Library/Application Support/listenbrainz-scrobbler/`. The service stores metadata and its SQLite queue there with user-only permissions. The submission token is held separately in login Keychain under `xyz.hakula.listenbrainz-scrobbler`. Uninstalling the agent preserves both the queue and Keychain entry.
 
@@ -64,6 +74,8 @@ uv build
 nix flake check
 ```
 
+For checkout-based development, run `uv sync --locked` and prefix CLI commands with `uv run`, for example `uv run lb-scrobbler probe`. Installing an agent from the checkout records its `.venv` Python path, so keep that environment in place and rerun `install` after recreating or moving it.
+
 Tests cover playback thresholds, interruptions, repeats, restart persistence, and HTTP retry behavior without contacting ListenBrainz. Validate real streaming playback and Automation access separately on macOS before enabling a new installation.
 
 ## Nix / Home Manager
@@ -83,6 +95,6 @@ The development shell generates pre-commit configuration from the flake and inst
 
 ## Releases
 
-GitHub releases provide a Python wheel, source distribution, and SHA-256 checksums. The same version tag is a Nix flake reference, for example `github:hakula139/listenbrainz-scrobbler/v0.1.0`. Pin that reference when adding the Home Manager module to another flake.
+[PyPI](https://pypi.org/project/listenbrainz-scrobbler/) distributes the package for `uv tool install`. [GitHub releases](https://github.com/hakula139/listenbrainz-scrobbler/releases) provide the same Python wheel and source distribution, plus SHA-256 checksums. The same version tag is a Nix flake reference, for example `github:hakula139/listenbrainz-scrobbler/v0.1.0`. Pin that reference when adding the Home Manager module to another flake.
 
 To release, update the package version in `pyproject.toml` and the submission client version in `tracking.py`, refresh `uv.lock`, and commit after checks pass. Push an annotated `v<version>` tag with the release notes in its annotation. The release workflow reruns Linux and macOS CI, checks that the tag matches the package version, builds the distributions, and publishes their checksums and the tag's notes to GitHub. A separate job verifies the released checksums and publishes those same files to PyPI through Trusted Publishing. To publish an existing GitHub release, run the Release workflow manually with its tag. The PyPI publisher must match this repository, `release.yml`, and the `pypi` GitHub environment.
