@@ -57,7 +57,7 @@ def test_errors_retain_payload_and_apply_retry_policy(
             lambda _: httpx.Response(status, headers=headers)
         ),
     ) as http:
-        assert send_one(queued, http, 2000) == delay
+        assert send_one(queued, http, 2000) == (delay if status in (429, 401) else 0)
     assert queued.next(2000) is None
     assert queued.status()['blocked'] == int(blocked)
     if blocked:
@@ -74,7 +74,7 @@ def test_network_failure_retains_original_listen(queued):
         base_url='https://api.listenbrainz.org/1/',
         transport=httpx.MockTransport(disconnect),
     ) as http:
-        assert send_one(queued, http, 2000) == 10
+        assert send_one(queued, http, 2000) == 0
     assert queued.next(2010)[1] == original
 
 

@@ -18,6 +18,19 @@ class Sample:
     duration: float = 0
     position: float = 0
 
+    def metadata(self) -> dict[str, Any]:
+        return {
+            'artist_name': self.artist,
+            'track_name': self.title,
+            'release_name': self.album,
+            'additional_info': {
+                'duration_ms': round(self.duration * 1000),
+                'media_player': 'Apple Music',
+                'submission_client': 'listenbrainz-scrobbler',
+                'submission_client_version': '0.2.0',
+            },
+        }
+
     @property
     def identity(self) -> tuple[str, str, str]:
         return self.title, self.artist, self.album
@@ -69,17 +82,7 @@ class Session:
     def payload(self) -> dict[str, Any]:
         return {
             'listened_at': self.started_at,
-            'track_metadata': {
-                'artist_name': self.sample.artist,
-                'track_name': self.sample.title,
-                'release_name': self.sample.album,
-                'additional_info': {
-                    'duration_ms': round(self.sample.duration * 1000),
-                    'media_player': 'Apple Music',
-                    'submission_client': 'listenbrainz-scrobbler',
-                    'submission_client_version': '0.1.1',
-                },
-            },
+            'track_metadata': self.sample.metadata(),
         }
 
 

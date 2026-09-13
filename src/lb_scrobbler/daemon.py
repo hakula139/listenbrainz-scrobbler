@@ -14,6 +14,7 @@ from . import service
 from .client import sender
 from .credentials import load_token
 from .music import MusicReader
+from .playback import PlaybackState
 from .store import Store
 from .tracking import Sample
 
@@ -27,6 +28,7 @@ class PlaybackMonitor:
         self.reader = reader
         self.state = state
         self.dry_run = dry_run
+        self.playback = PlaybackState()
         self.tracker = store.restore()
         self.previous_error: str | None = None
 
@@ -50,8 +52,9 @@ class PlaybackMonitor:
         sample, error = self.read()
         now = time.time()
         payload = self.tracker.observe(sample, now)
-        self.store.checkpoint(self.tracker, payload)
         session = self.tracker.session
+        self.playback.update(session, time.monotonic())
+        self.store.checkpoint(self.tracker, payload)
         if payload:
             assert session is not None
             logger.info('Qualified listen %s', session.id)
@@ -75,7 +78,7 @@ def monitor_playback(path: Path, token: str | None, stop: threading.Event) -> No
         worker = None
         if token is not None:
             worker = threading.Thread(
-                target=sender, args=(path, token, stop), daemon=True
+                target=sender, args=(path, token, stop, monitor.playback), daemon=True
             )
             worker.start()
 
