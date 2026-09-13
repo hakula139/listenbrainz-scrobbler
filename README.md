@@ -51,7 +51,7 @@ State and logs live in `~/Library/Application Support/listenbrainz-scrobbler/`. 
 
 A persistent scripting process samples playback every two seconds. It submits after observing half a track or four minutes of playback, whichever comes first, following [ListenBrainz's submission rule](https://listenbrainz.readthedocs.io/en/latest/users/api/core.html). Pauses, seeks, and observation gaps longer than ten seconds do not contribute listening time. Starting the service halfway through a song does not credit playback it did not observe.
 
-Qualified listens and playback checkpoints are committed together. A separate worker sends the queue and retains failures with the original listen timestamp. Network and server errors use delayed retries. Invalid payloads remain blocked for inspection through `status` and manual `retry`. After replacing an expired token, reinstall the agent so the worker loads it. Delivery is at least once: a crash after server acceptance but before local acknowledgement can resend the same payload.
+Qualified listens and playback checkpoints are committed together. A separate worker sends the queue and retains failures with the original listen timestamp. Network and server errors use delayed retries. Invalid payloads remain blocked for inspection through `status` and manual `retry`. After replacing an expired token, restart the agent so the worker loads it. For a manual installation, run `lb-scrobbler install`. Delivery is at least once: a crash after server acceptance but before local acknowledgement can resend the same payload.
 
 Dry-run mode uses a separate queue that is never sent. There is no historical backfill or iPhone library synchronization, and no optional playing-now submissions. The service captures playback observed on this Mac.
 
@@ -89,7 +89,7 @@ services.listenbrainz-scrobbler.enable = true;
 
 Home Manager replaces the manual installer's LaunchAgent under the same label while preserving the queue and Keychain token. Activate Home Manager, then check `lb-scrobbler status` to confirm the agent loaded and observations are fresh. The package path changes, so macOS may request Automation or Keychain access again. Use `lb-scrobbler auth` if no token is stored yet.
 
-The LaunchAgent starts at user login after a reboot, when Music and the login Keychain are available. Home Manager owns its lifecycle after migration. Disable the module and reactivate Home Manager to remove it. The existing Keychain entry keeps credentials outside the Nix store.
+The LaunchAgent starts at user login after a reboot, when Music and the login Keychain are available. Home Manager owns its lifecycle after migration, so use it for configuration changes instead of the manual `install` and `uninstall` commands. After changing the token, restart the loaded agent with `launchctl kickstart -k "gui/$(id -u)/xyz.hakula.listenbrainz-scrobbler"`. Disable the module and reactivate Home Manager to remove it. The existing Keychain entry keeps credentials outside the Nix store.
 
 The development shell generates pre-commit configuration from the flake and installs the Git hooks. CI checks hooks and locked Python dependencies on Linux and macOS, and builds the package and a Home Manager configuration on macOS. The Home Manager check builds the activation script without activating it.
 
