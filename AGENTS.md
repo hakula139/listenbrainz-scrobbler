@@ -41,4 +41,4 @@ CI runs hooks and locked Python checks on Linux and macOS. Tests cover playback 
 
 ## Releases
 
-To release, update the package version in `pyproject.toml` and the submission client version in `src/lb_scrobbler/tracking.py`, refresh `uv.lock`, and commit after checks pass. Push an annotated `v<version>` tag with the release notes in its annotation. The release workflow reruns Linux and macOS CI, checks that the tag matches the package version, builds the distributions, and publishes their checksums and the tag's notes to GitHub. A separate job verifies the released checksums and publishes those same files to PyPI through Trusted Publishing. To publish an existing GitHub release, run the Release workflow manually with its tag. The PyPI publisher must match this repository, `release.yml`, and the `pypi` GitHub environment.
+Use the [release skill](.agents/skills/release/SKILL.md) to prepare the changelog and version changes, publish a release, and verify GitHub and PyPI artifacts.
