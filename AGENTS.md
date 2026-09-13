@@ -14,7 +14,7 @@ Configure logging at the CLI boundary and use named loggers in other modules. Ke
 
 ## Service integration
 
-Music automation and the login Keychain require a user session. Keep the service a user LaunchAgent that starts at login. A foreground probe does not prove that the background process has Automation permission, and a changed Python executable may require new consent.
+Music automation and the login Keychain require a user session. Keep the service a user LaunchAgent that starts at login. A foreground probe does not prove that the background process has Automation permission, and a changed Python executable may require new consent. Leave launchd ProcessType at its default: Background throttling can delay observer startup for minutes under load and prevent timely playback sampling.
 
 The manual installer and Home Manager module share the LaunchAgent label, state directory, and Keychain entry so users can migrate without losing their queue or credentials. Keep those contracts aligned. In the Home Manager activation graph, create the state directory before `setupLaunchAgents`, since launchd must open the log files when starting the service.
 

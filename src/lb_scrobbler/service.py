@@ -50,7 +50,6 @@ def install(dry_run: bool) -> None:
         'KeepAlive': {'SuccessfulExit': False},
         'ThrottleInterval': 30,
         'ExitTimeOut': 80,
-        'ProcessType': 'Background',
         'StandardOutPath': str(STATE / 'service.log'),
         'StandardErrorPath': str(STATE / 'service.log'),
     }
