@@ -125,3 +125,11 @@ def test_transient_read_failure_does_not_credit_the_gap():
     tracker.observe(Sample('unavailable'), 1012)
     tracker.observe(sample(18), 1018)
     assert tracker.session.seconds == 10
+
+
+def test_attach_while_paused_anchors_timestamp_on_resume():
+    tracker = Tracker()
+    tracker.observe(sample(10, 'paused'), 1000)
+    assert tracker.session is None
+    payload = play(tracker, start=10, end=60, offset=2000)[0]
+    assert payload['listened_at'] == 2000

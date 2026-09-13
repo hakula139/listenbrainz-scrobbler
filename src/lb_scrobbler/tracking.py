@@ -55,6 +55,12 @@ class Tracker:
             self.session = None
             return None
 
+        if current.state == 'paused' and (
+            self.session is None or self.session.sample.identity != current.identity
+        ):
+            self.session = None
+            return None
+
         previous = self.session
         elapsed = now - previous.observed_at if previous else 0
         same = previous is not None and previous.sample.identity == current.identity
