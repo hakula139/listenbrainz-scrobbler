@@ -36,9 +36,10 @@ function run() {
       result = snapshot(music);
     } catch (error) {
       result = {
-        error: String(error).includes('-1743')
-          ? 'Music Automation access denied (-1743)'
-          : 'Music scripting query failed',
+        error:
+          error.errorNumber === -1743
+            ? 'Music Automation access denied (-1743)'
+            : 'Music scripting query failed',
       };
     }
 
