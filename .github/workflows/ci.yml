@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+      - name: Check flake, hooks, and macOS package
+        run: nix flake check --print-build-logs
+      - name: Install locked Python dependencies
+        run: nix develop -c uv sync --locked
+      - name: Check Python types
+        run: nix develop -c uv run --frozen mypy src/lb_scrobbler
+      - name: Check Python formatting and lint
+        run: |
+          nix develop -c uv run --frozen ruff format --check .
+          nix develop -c uv run --frozen ruff check .
+      - name: Run tests and build wheel
+        run: |
+          nix develop -c uv run --frozen pytest -q
+          nix develop -c uv build

@@ -54,12 +54,29 @@ Polling cannot distinguish a natural repeat from manually seeking from the very 
 The source is split into playback tracking, persistence, Music observation, API submission, credentials, and service lifecycle modules. Runtime dependencies are `httpx` and macOS `keyring`. No Scroblebler source is copied into this project.
 
 ```sh
-uv run pre-commit install
-uv run pre-commit run --all-files
+nix develop
+pre-commit run --all-files
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy src/lb_scrobbler
 uv run pytest -q
 uv build
+nix flake check
 ```
 
 Tests cover playback thresholds, interruptions, repeats, restart persistence, and HTTP retry behavior without contacting ListenBrainz. Validate real streaming playback and Automation access separately on macOS before enabling a new installation.
+
+## Nix / Home Manager
+
+`nix build` builds the macOS package with Python 3.13. The flake exports `homeManagerModules.default` so nix-darwin configurations using Home Manager can manage the service declaratively. Add this repository as a flake input, then import the module in your Home Manager configuration:
+
+```nix
+imports = [ inputs.listenbrainz-scrobbler.homeManagerModules.default ];
+services.listenbrainz-scrobbler.enable = true;
+```
+
+Before switching from the manual installer, run `lb-scrobbler uninstall` using the existing installation. This removes its unmanaged plist while preserving the queue and Keychain token. Activate Home Manager, then check `lb-scrobbler status`. The package path changes, so macOS may request Automation or Keychain access again. Use `lb-scrobbler auth` if no token is stored yet.
+
+The LaunchAgent starts at user login after a reboot, when Music and the login Keychain are available. Home Manager owns its lifecycle after migration. Disable the module and reactivate Home Manager to remove it. The existing Keychain entry keeps credentials outside the Nix store.
+
+The development shell generates pre-commit configuration from the flake and installs the Git hooks. CI checks hooks and locked Python dependencies on Linux and macOS, and builds the package and a Home Manager configuration on macOS. The Home Manager check builds the activation script without activating it.
