@@ -1,4 +1,4 @@
-"""Send queued listens without blocking the playback sampler."""
+"""Submit listening history and current playback outside the sampler."""
 
 import json
 import logging
@@ -11,6 +11,7 @@ from typing import cast
 
 import httpx
 
+from .playback import Playback, PlaybackState
 from .store import Store
 
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 API = 'https://api.listenbrainz.org/1/'
+BLOCKED_STATUS_CODES = frozenset({400, 404, 413, 422})
 
 
 def client(token: str) -> httpx.Client:
@@ -41,12 +43,12 @@ def validate_token(token: str) -> str:
 
 
 def send_one(store: Store, http: httpx.Client, now: float) -> float:
-    """Return the retry delay while preserving failed listens in the outbox."""
+    """Retain failed listens and return only an API-wide cooldown."""
     row = store.next(now)
     if row is None:
-        return 2
+        return 0
     key, payload, attempts = row
-    delay: float = min(900, 10 * 2 ** min(attempts, 7))
+    delay = retry_delay(attempts)
     try:
         response = http.post(
             'submit-listens',
@@ -62,18 +64,15 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
             key,
             delay,
         )
-        return delay
-    match response.status_code:
-        case 200:
-            store.acknowledge(key)
-            logger.info('Submitted listen %s', key)
-            return 1
-        case 429:
-            delay = rate_limit_delay(response)
-        case 401 | 403:
-            delay = 300
+        return 0
+    if response.status_code == 200:
+        store.acknowledge(key)
+        logger.info('Submitted listen %s', key)
+        return 0
 
-    blocked = response.status_code in (400, 404, 413, 422)
+    cooldown = api_cooldown(response)
+    delay = cooldown or delay
+    blocked = response.status_code in BLOCKED_STATUS_CODES
     error = f'HTTP {response.status_code}'
     store.fail(key, error, now + delay, blocked)
     if blocked:
@@ -82,7 +81,21 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
         logger.warning(
             'Submission failed for listen %s: %s (retry in %.0f s)', key, error, delay
         )
-    return delay
+    return cooldown
+
+
+def retry_delay(attempts: int) -> float:
+    return float(min(900, 10 * 2 ** min(attempts, 7)))
+
+
+def api_cooldown(response: httpx.Response) -> float:
+    match response.status_code:
+        case 429:
+            return rate_limit_delay(response)
+        case 401 | 403:
+            return 300
+        case _:
+            return 0
 
 
 def rate_limit_delay(response: httpx.Response) -> float:
@@ -96,7 +109,128 @@ def rate_limit_delay(response: httpx.Response) -> float:
     return max(1, delay) if math.isfinite(delay) and delay >= 0 else 60
 
 
-def sender(path: Path, token: str, stop: Event) -> None:
+class PlayingNowSender:
+    def __init__(self, playback: PlaybackState) -> None:
+        self.playback = playback
+        self.generation = 0
+        self.sent_generation = 0
+        self.attempts = 0
+        self.retry_at = 0.0
+        self.refresh_at = 0.0
+        self.identity: tuple[str, str] | None = None
+        self.blocked = False
+        self.announced = False
+        self.synchronized = False
+
+    def update_generation(self, generation: int) -> None:
+        if generation != self.generation:
+            self.generation = generation
+            self.attempts = 0
+            self.retry_at = 0
+            self.blocked = False
+
+    def send(self, http: httpx.Client, now: float) -> float:
+        """Update or clear fresh playback and return an API-wide cooldown."""
+        began = time.monotonic()
+        current = self.playback.current(now)
+        self.update_generation(current.generation if current else 0)
+        if self.blocked or now < self.retry_at:
+            return 0
+        if current is None:
+            return self.clear(http, now) if self.announced else 0
+        if not self.synchronized:
+            # Duplicate updates return success without renewing the server's TTL.
+            # Clear our existing entry when its actual expiry is unknown.
+            cooldown = self.clear(http, now)
+            if not self.synchronized:
+                return cooldown
+            now += time.monotonic() - began
+            current = self.playback.current(now)
+            if current is None:
+                return 0
+            self.update_generation(current.generation)
+        if self.sent_generation == self.generation and now < self.refresh_at:
+            return 0
+        return self.submit(http, current, now)
+
+    def submit(self, http: httpx.Client, current: Playback, now: float) -> float:
+        began = time.monotonic()
+        try:
+            response = http.post(
+                'submit-listens',
+                json={
+                    'listen_type': 'playing_now',
+                    'payload': [{'track_metadata': current.sample.metadata()}],
+                },
+            )
+        except httpx.TransportError:
+            # The server may have accepted the update before the response was lost.
+            self.announced = True
+            self.synchronized = False
+            return self.fail(None, now)
+        if response.status_code != 200:
+            if response.status_code >= 500:
+                self.announced = True
+                self.synchronized = False
+            return self.fail(response, now)
+
+        identity = (current.sample.title, current.sample.artist)
+        # ListenBrainz ignores same-title/artist updates until their TTL expires.
+        if identity != self.identity or now >= self.refresh_at:
+            completed = now + (time.monotonic() - began)
+            self.refresh_at = completed + math.ceil(current.sample.duration) + 1
+        self.identity = identity
+        self.sent_generation = self.generation
+        self.attempts = 0
+        self.announced = True
+        logger.info('Sent playing-now update for session %s', current.session_id)
+        return 0
+
+    def clear(self, http: httpx.Client, now: float) -> float:
+        self.synchronized = False
+        try:
+            response = http.post(
+                'playing-now/delete', json={'client': 'listenbrainz-scrobbler'}
+            )
+        except httpx.TransportError:
+            return self.fail(None, now)
+        if response.status_code not in (200, 404):
+            return self.fail(response, now)
+
+        self.announced = False
+        self.synchronized = True
+        self.identity = None
+        self.refresh_at = 0
+        logger.info('Cleared playing-now update')
+        return 0
+
+    def fail(self, response: httpx.Response | None, now: float) -> float:
+        delay = retry_delay(self.attempts)
+        cooldown = api_cooldown(response) if response is not None else 0
+        self.retry_at = now + (cooldown or delay)
+        self.attempts += 1
+        self.blocked = (
+            response is not None and response.status_code in BLOCKED_STATUS_CODES
+        )
+        error = (
+            f'HTTP {response.status_code}' if response is not None else 'network error'
+        )
+        if self.blocked:
+            logger.warning('Playing-now update blocked: %s', error)
+        else:
+            logger.warning(
+                'Playing-now update failed: %s (retry in %.0f s)',
+                error,
+                cooldown or delay,
+            )
+        return cooldown
+
+
+def sender(path: Path, token: str, stop: Event, playback: PlaybackState) -> None:
     with closing(Store(path)) as store, client(token) as http:
+        playing = PlayingNowSender(playback)
         while not stop.is_set():
-            stop.wait(send_one(store, http, time.time()))
+            delay = playing.send(http, time.monotonic())
+            if not delay and not stop.is_set():
+                delay = send_one(store, http, time.time())
+            stop.wait(delay or 2)

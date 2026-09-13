@@ -54,6 +54,8 @@ lb-scrobbler retry       # Retry retained failures after fixing their cause
 
 State and logs live in `~/Library/Application Support/listenbrainz-scrobbler/`. Queued listens are stored there with user-only permissions. The submission token is held separately in login Keychain under `xyz.hakula.listenbrainz-scrobbler`. Uninstalling the agent preserves both the queue and Keychain entry.
 
+The current song appears on ListenBrainz as soon as playback is observed. Pausing or stopping playback clears this service's playing-now notification. These temporary updates are not saved as listening history and are discarded when playback changes. If the service is stopped or offline, an existing notification remains until ListenBrainz expires it.
+
 A listen is submitted after observing half a track or four minutes of playback, whichever comes first, following [ListenBrainz's submission rule](https://listenbrainz.readthedocs.io/en/latest/users/api/core.html). Pauses, seeks, and observation gaps longer than ten seconds do not contribute listening time. Starting the service halfway through a song does not credit playback it did not observe.
 
 Failed submissions stay queued with their original timestamps. Network and server errors are retried automatically. Inspect other failures with `status`, fix their cause, then run `retry`. After changing the token, restart the agent. For a manual installation, run `lb-scrobbler install`. A crash during submission can occasionally cause a duplicate listen.
@@ -62,13 +64,13 @@ Dry runs never submit listens.
 
 ## Limits
 
-Only playback observed on this Mac is captured. There is no history import, iPhone synchronization, or playing-now submission.
+Only playback observed on this Mac is captured. There is no history import or iPhone synchronization.
 
 Polling cannot distinguish a natural repeat from manually seeking from the very end to the very beginning. It also cannot identify different recordings with identical title, artist, and album metadata. Track-start timestamps are estimated from the observed position, so seeking before the first observation can skew that estimate. Missing metadata is skipped.
 
 ## Nix / Home Manager
 
-Add a versioned flake input such as `github:hakula139/listenbrainz-scrobbler/v0.1.1`, then import the module in your Home Manager configuration:
+Add a versioned flake input such as `github:hakula139/listenbrainz-scrobbler/v0.2.0`, then import the module in your Home Manager configuration:
 
 ```nix
 imports = [ inputs.listenbrainz-scrobbler.homeManagerModules.default ];
