@@ -3,12 +3,13 @@
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any, cast
 
 from .tracking import Session, Tracker
 
 
 class Store:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path) -> None:
         self.db = sqlite3.connect(path, timeout=10)
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.executescript("""
@@ -26,7 +27,7 @@ class Store:
             );
         """)
 
-    def close(self):
+    def close(self) -> None:
         self.db.close()
 
     def restore(self) -> Tracker:
@@ -34,7 +35,7 @@ class Store:
         data = json.loads(row[0]) if row else None
         return Tracker(Session.decode(data) if data else None)
 
-    def checkpoint(self, tracker: Tracker, payload: dict | None):
+    def checkpoint(self, tracker: Tracker, payload: dict[str, Any] | None) -> None:
         with self.db:
             session = tracker.session
             self.db.execute(
@@ -48,18 +49,21 @@ class Store:
                     (session.id, json.dumps(payload)),
                 )
 
-    def next(self, now: float) -> tuple | None:
-        return self.db.execute(
+    def next(self, now: float) -> tuple[str, str, int] | None:
+        row = self.db.execute(
             'SELECT id, payload, attempts FROM outbox '
             'WHERE blocked = 0 AND retry_at <= ? ORDER BY rowid LIMIT 1',
             (now,),
         ).fetchone()
+        return cast(tuple[str, str, int] | None, row)
 
-    def acknowledge(self, key: str):
+    def acknowledge(self, key: str) -> None:
         with self.db:
             self.db.execute('DELETE FROM outbox WHERE id = ?', (key,))
 
-    def fail(self, key: str, error: str, retry_at: float, blocked: bool = False):
+    def fail(
+        self, key: str, error: str, retry_at: float, blocked: bool = False
+    ) -> None:
         with self.db:
             self.db.execute(
                 'UPDATE outbox SET attempts = attempts + 1, error = ?, '
@@ -67,7 +71,7 @@ class Store:
                 (error, retry_at, blocked, key),
             )
 
-    def status(self) -> dict:
+    def status(self) -> dict[str, Any]:
         pending, blocked = self.db.execute(
             'SELECT COUNT(*), COALESCE(SUM(blocked), 0) FROM outbox'
         ).fetchone()
@@ -80,6 +84,6 @@ class Store:
             'errors': [r[0] for r in errors],
         }
 
-    def retry(self):
+    def retry(self) -> None:
         with self.db:
             self.db.execute('UPDATE outbox SET blocked = 0, retry_at = 0')

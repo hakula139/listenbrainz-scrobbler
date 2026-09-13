@@ -21,7 +21,7 @@ from .store import Store
 from .tracking import Sample
 
 
-def run(dry_run: bool):
+def run(dry_run: bool) -> None:
     service.STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (service.STATE / 'run.lock').open('w') as lock:
         try:
@@ -33,7 +33,7 @@ def run(dry_run: bool):
         _run(dry_run)
 
 
-def _run(dry_run: bool):
+def _run(dry_run: bool) -> None:
     path = service.STATE / ('dry-run.sqlite3' if dry_run else 'state.sqlite3')
     token = None if dry_run else load_token()
     stop = threading.Event()
@@ -69,6 +69,7 @@ def _run(dry_run: bool):
             payload = tracker.observe(sample, now)
             store.checkpoint(tracker, payload)
             if payload:
+                assert tracker.session is not None
                 logging.info('Qualified listen %s', tracker.session.id)
             status = {
                 'updated_at': now,
@@ -90,7 +91,7 @@ def _run(dry_run: bool):
         store.close()
 
 
-def main():
+def main() -> None:
     os.umask(0o077)
     logging.basicConfig(
         level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s'

@@ -26,7 +26,7 @@ def loaded() -> bool:
     )
 
 
-def stop():
+def stop() -> None:
     if loaded():
         subprocess.run(['launchctl', 'bootout', f'{domain()}/{LABEL}'], check=True)
         deadline = time.monotonic() + 20
@@ -36,7 +36,7 @@ def stop():
             time.sleep(0.2)
 
 
-def install(dry_run: bool):
+def install(dry_run: bool) -> None:
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     PLIST.parent.mkdir(parents=True, exist_ok=True)
     arguments = [sys.executable, '-m', 'lb_scrobbler.cli', 'run']
@@ -59,6 +59,6 @@ def install(dry_run: bool):
     subprocess.run(['launchctl', 'bootstrap', domain(), str(PLIST)], check=True)
 
 
-def uninstall():
+def uninstall() -> None:
     stop()
     PLIST.unlink(missing_ok=True)

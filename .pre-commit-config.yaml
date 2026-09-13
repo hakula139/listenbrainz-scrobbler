@@ -11,6 +11,12 @@ repos:
         entry: uv run --frozen ruff format --check
         language: system
         types: [python]
+      - id: mypy
+        name: mypy
+        entry: uv run --frozen mypy src/lb_scrobbler
+        language: system
+        types: [python]
+        pass_filenames: false
       - id: pytest
         name: pytest
         entry: uv run --frozen pytest -q

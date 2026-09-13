@@ -10,10 +10,10 @@ from .tracking import Sample
 
 
 class MusicReader:
-    def __init__(self):
-        self.process = None
+    def __init__(self) -> None:
+        self.process: subprocess.Popen[bytes] | None = None
 
-    def close(self):
+    def close(self) -> None:
         if self.process:
             self.process.terminate()
             try:
@@ -21,6 +21,7 @@ class MusicReader:
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait()
+            assert self.process.stdout is not None
             self.process.stdout.close()
             self.process = None
 
@@ -39,6 +40,7 @@ class MusicReader:
                 stderr=subprocess.DEVNULL,
             )
             timeout = 60
+        assert self.process.stdout is not None
         ready, _, _ = select.select([self.process.stdout], [], [], timeout)
         if not ready:
             self.close()

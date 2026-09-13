@@ -3,6 +3,9 @@
 import json
 import logging
 import time
+from pathlib import Path
+from threading import Event
+from typing import cast
 
 import httpx
 
@@ -29,7 +32,7 @@ def validate_token(token: str) -> str:
         data = response.json()
         if not data.get('valid') or not isinstance(data.get('user_name'), str):
             raise RuntimeError('ListenBrainz token is invalid')
-        return data['user_name']
+        return cast(str, data['user_name'])
 
 
 def send_one(store: Store, http: httpx.Client, now: float) -> float:
@@ -38,7 +41,7 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
     if row is None:
         return 2
     key, payload, attempts = row
-    delay = min(900, 10 * 2 ** min(attempts, 7))
+    delay: float = min(900, 10 * 2 ** min(attempts, 7))
     try:
         response = http.post(
             'submit-listens',
@@ -75,7 +78,7 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
     return delay
 
 
-def sender(path, token: str, stop):
+def sender(path: Path, token: str, stop: Event) -> None:
     store = Store(path)
     try:
         with client(token) as http:

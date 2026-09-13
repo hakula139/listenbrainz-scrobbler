@@ -1,6 +1,7 @@
 """Count observed playback, excluding seeks and gaps between observations."""
 
 from dataclasses import asdict, dataclass
+from typing import Any
 from uuid import uuid4
 
 
@@ -31,19 +32,19 @@ class Session:
     seconds: float = 0
     queued: bool = False
 
-    def encode(self) -> dict:
+    def encode(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def decode(cls, data: dict) -> 'Session':
+    def decode(cls, data: dict[str, Any]) -> 'Session':
         return cls(**{**data, 'sample': Sample(**data['sample'])})
 
 
 class Tracker:
-    def __init__(self, session: Session | None = None):
+    def __init__(self, session: Session | None = None) -> None:
         self.session = session
 
-    def observe(self, current: Sample, now: float) -> dict | None:
+    def observe(self, current: Sample, now: float) -> dict[str, Any] | None:
         if current.state == 'unavailable':
             if self.session:
                 self.session.sample.state = 'unavailable'

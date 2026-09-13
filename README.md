@@ -4,7 +4,7 @@ A background service that submits Apple Music playback on macOS to ListenBrainz.
 
 ## Setup
 
-Install Python 3.12 or newer and [uv](https://docs.astral.sh/uv/), then run from this checkout:
+Install Python 3.13 or newer and [uv](https://docs.astral.sh/uv/), then run from this checkout:
 
 ```sh
 uv sync --locked
