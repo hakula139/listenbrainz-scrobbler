@@ -7,9 +7,6 @@
 ### Added
 
 - Show the current Apple Music track on ListenBrainz before it qualifies for listening history, and clear this service's notification when playback pauses or stops.
-
-### Fixed
-
 - Keep current playback updates responsive while older listens wait for retry, while respecting shared API rate limits.
 
 ### Changed

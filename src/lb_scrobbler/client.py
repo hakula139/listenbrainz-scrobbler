@@ -1,4 +1,4 @@
-"""Send queued listens without blocking the playback sampler."""
+"""Submit listening history and current playback outside the sampler."""
 
 import json
 import logging
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 API = 'https://api.listenbrainz.org/1/'
+BLOCKED_STATUS_CODES = frozenset({400, 404, 413, 422})
 
 
 def client(token: str) -> httpx.Client:
@@ -47,7 +48,7 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
     if row is None:
         return 0
     key, payload, attempts = row
-    delay: float = min(900, 10 * 2 ** min(attempts, 7))
+    delay = retry_delay(attempts)
     try:
         response = http.post(
             'submit-listens',
@@ -64,17 +65,14 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
             delay,
         )
         return 0
-    match response.status_code:
-        case 200:
-            store.acknowledge(key)
-            logger.info('Submitted listen %s', key)
-            return 0
-        case 429:
-            delay = rate_limit_delay(response)
-        case 401 | 403:
-            delay = 300
+    if response.status_code == 200:
+        store.acknowledge(key)
+        logger.info('Submitted listen %s', key)
+        return 0
 
-    blocked = response.status_code in (400, 404, 413, 422)
+    cooldown = api_cooldown(response)
+    delay = cooldown or delay
+    blocked = response.status_code in BLOCKED_STATUS_CODES
     error = f'HTTP {response.status_code}'
     store.fail(key, error, now + delay, blocked)
     if blocked:
@@ -83,7 +81,11 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
         logger.warning(
             'Submission failed for listen %s: %s (retry in %.0f s)', key, error, delay
         )
-    return api_cooldown(response)
+    return cooldown
+
+
+def retry_delay(attempts: int) -> float:
+    return float(min(900, 10 * 2 ** min(attempts, 7)))
 
 
 def api_cooldown(response: httpx.Response) -> float:
@@ -203,15 +205,12 @@ class PlayingNowSender:
         return 0
 
     def fail(self, response: httpx.Response | None, now: float) -> float:
-        delay: float = min(900, 10 * 2 ** min(self.attempts, 7))
+        delay = retry_delay(self.attempts)
         cooldown = api_cooldown(response) if response is not None else 0
         self.retry_at = now + (cooldown or delay)
         self.attempts += 1
-        self.blocked = response is not None and response.status_code in (
-            400,
-            404,
-            413,
-            422,
+        self.blocked = (
+            response is not None and response.status_code in BLOCKED_STATUS_CODES
         )
         error = (
             f'HTTP {response.status_code}' if response is not None else 'network error'

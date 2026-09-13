@@ -56,7 +56,21 @@ def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requ
             '/1/submit-listens',
             {
                 'listen_type': 'playing_now',
-                'payload': [{'track_metadata': session().sample.metadata()}],
+                'payload': [
+                    {
+                        'track_metadata': {
+                            'artist_name': 'Artist',
+                            'track_name': 'Track',
+                            'release_name': 'Album',
+                            'additional_info': {
+                                'duration_ms': 120000,
+                                'media_player': 'Apple Music',
+                                'submission_client': 'listenbrainz-scrobbler',
+                                'submission_client_version': '0.2.0',
+                            },
+                        },
+                    }
+                ],
             },
         ),
     ]
@@ -359,3 +373,30 @@ def test_resynchronizing_unknown_acceptance_preserves_exponential_backoff(
             playback.update(session(), now)
             playing.send(http, now)
     assert submitted_at == [10, 20, 40, 80]
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_rechecks_current_playback_after_blocking_initial_clear(
+    playback, monkeypatch, changed
+):
+    clock = [10]
+    submitted = []
+    monkeypatch.setattr('lb_scrobbler.client.time.monotonic', lambda: clock[0])
+
+    def respond(request):
+        if request.url.path.endswith('/playing-now/delete'):
+            clock[0] = 22
+            if changed:
+                playback.update(session(title='Next', key='next'), clock[0])
+        else:
+            metadata = json.loads(request.content)['payload'][0]['track_metadata']
+            submitted.append(metadata['track_name'])
+        return httpx.Response(200)
+
+    playing = PlayingNowSender(playback)
+    with httpx.Client(
+        base_url='https://example.org/', transport=httpx.MockTransport(respond)
+    ) as http:
+        playback.update(session(), 10)
+        playing.send(http, 10)
+    assert submitted == (['Next'] if changed else [])
