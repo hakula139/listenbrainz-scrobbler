@@ -64,7 +64,7 @@ def _run(dry_run: bool):
                     logging.info('Playback observation recovered')
             previous_error = error
             now = time.time()
-            if worker and not worker.is_alive():
+            if worker and not worker.is_alive() and not stop.is_set():
                 raise RuntimeError('Submission worker exited. Restarting service')
             payload = tracker.observe(sample, now)
             store.checkpoint(tracker, payload)
