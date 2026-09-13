@@ -14,6 +14,9 @@ import httpx
 from .store import Store
 
 
+logger = logging.getLogger(__name__)
+
+
 API = 'https://api.listenbrainz.org/1/'
 
 
@@ -54,11 +57,16 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
         )
     except httpx.TransportError:
         store.fail(key, 'Network request failed', now + delay)
+        logger.warning(
+            'Submission failed for listen %s: network error (retry in %.0f s)',
+            key,
+            delay,
+        )
         return delay
     match response.status_code:
         case 200:
             store.acknowledge(key)
-            logging.info('Submitted listen %s', key)
+            logger.info('Submitted listen %s', key)
             return 1
         case 429:
             delay = rate_limit_delay(response)
@@ -68,9 +76,12 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
     blocked = response.status_code in (400, 404, 413, 422)
     error = f'HTTP {response.status_code}'
     store.fail(key, error, now + delay, blocked)
-    logging.warning(
-        'Submission failed: %s%s', error, '; retained for retry' if blocked else ''
-    )
+    if blocked:
+        logger.warning('Submission blocked for listen %s: %s', key, error)
+    else:
+        logger.warning(
+            'Submission failed for listen %s: %s (retry in %.0f s)', key, error, delay
+        )
     return delay
 
 

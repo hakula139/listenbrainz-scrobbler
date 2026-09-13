@@ -18,6 +18,9 @@ from .store import Store
 from .tracking import Sample
 
 
+logger = logging.getLogger(__name__)
+
+
 class PlaybackMonitor:
     def __init__(self, store: Store, reader: MusicReader, state: Path, dry_run: bool):
         self.store = store
@@ -37,9 +40,9 @@ class PlaybackMonitor:
 
         if error != self.previous_error:
             if error:
-                logging.warning('%s', error)
+                logger.warning('%s', error)
             else:
-                logging.info('Playback observation recovered')
+                logger.info('Playback observation recovered')
         self.previous_error = error
         return sample, error
 
@@ -51,7 +54,7 @@ class PlaybackMonitor:
         session = self.tracker.session
         if payload:
             assert session is not None
-            logging.info('Qualified listen %s', session.id)
+            logger.info('Qualified listen %s', session.id)
 
         status = {
             'updated_at': now,
@@ -76,7 +79,7 @@ def monitor_playback(path: Path, token: str | None, stop: threading.Event) -> No
             )
             worker.start()
 
-        logging.info('Started in %s mode', 'dry-run' if token is None else 'submission')
+        logger.info('Started in %s mode', 'dry-run' if token is None else 'submission')
         try:
             while not stop.is_set():
                 began = time.monotonic()

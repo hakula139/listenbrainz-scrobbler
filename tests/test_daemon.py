@@ -1,5 +1,6 @@
 import json
 from contextlib import closing
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 from lb_scrobbler.daemon import PlaybackMonitor
@@ -16,10 +17,9 @@ def test_monitor_retains_progress_across_read_failure(tmp_path, monkeypatch):
         Sample('playing', 'Track', 'Artist', '', 100, 18),
     ]
     clock = iter([1000, 1010, 1012, 1018])
-    monkeypatch.setattr('lb_scrobbler.daemon.time.time', lambda: next(clock))
-    # Logging also reads time.time, so disable it while advancing the fake clock.
-    monkeypatch.setattr('lb_scrobbler.daemon.logging.warning', Mock())
-    monkeypatch.setattr('lb_scrobbler.daemon.logging.info', Mock())
+    monkeypatch.setattr(
+        'lb_scrobbler.daemon.time', SimpleNamespace(time=lambda: next(clock))
+    )
 
     with closing(Store(tmp_path / 'state.sqlite3')) as store:
         monitor = PlaybackMonitor(store, reader, tmp_path, dry_run=True)

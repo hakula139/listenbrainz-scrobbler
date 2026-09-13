@@ -105,12 +105,18 @@ def dispatch(args: argparse.Namespace) -> None:
             service.uninstall()
 
 
+def configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.WARNING,
+        format='%(asctime)s %(levelname)-8s %(name)s: %(message)s',
+        datefmt='%Y-%m-%dT%H:%M:%S%z',
+    )
+    logging.getLogger('lb_scrobbler').setLevel(logging.INFO)
+
+
 def main() -> None:
     os.umask(0o077)
-    logging.basicConfig(
-        level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s'
-    )
-    logging.getLogger('httpx').setLevel(logging.WARNING)
+    configure_logging()
     parser = build_parser()
     args = parser.parse_args()
 
