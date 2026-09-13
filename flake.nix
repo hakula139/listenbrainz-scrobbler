@@ -116,7 +116,7 @@
         # ----------------------------------------------------------------------
         devShells.default = pkgs.mkShell {
           packages = preCommitCheck.enabledPackages ++ [
-            python
+            pkgs.python313
             pkgs.uv
           ];
           inherit (preCommitCheck) shellHook;
