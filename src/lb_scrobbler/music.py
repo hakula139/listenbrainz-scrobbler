@@ -2,10 +2,12 @@
 
 import json
 import math
+import os
 import select
 import subprocess
 from contextlib import closing
 from pathlib import Path
+from time import monotonic
 
 from .tracking import Sample
 
@@ -13,8 +15,10 @@ from .tracking import Sample
 class MusicReader:
     def __init__(self) -> None:
         self.process: subprocess.Popen[bytes] | None = None
+        self.buffer = bytearray()
 
     def close(self) -> None:
+        self.buffer.clear()
         if self.process:
             self.process.terminate()
             try:
@@ -38,21 +42,35 @@ class MusicReader:
                     str(Path(__file__).with_name('music.js')),
                 ],
                 stdout=subprocess.PIPE,
+                bufsize=0,
                 stderr=subprocess.DEVNULL,
             )
             timeout = 60
-        assert self.process.stdout is not None
-        ready, _, _ = select.select([self.process.stdout], [], [], timeout)
-        if not ready:
-            self.close()
-            raise RuntimeError(
-                'Music query timed out. Check Automation access and Music.'
+        return parse_sample(self._read_line(timeout))
+
+    def _read_line(self, timeout: float) -> bytes:
+        assert self.process is not None and self.process.stdout is not None
+        deadline = monotonic() + timeout
+        while b'\n' not in self.buffer:
+            remaining = deadline - monotonic()
+            ready, _, _ = select.select(
+                [self.process.stdout], [], [], max(0, remaining)
             )
-        line = self.process.stdout.readline()
-        if not line:
-            self.close()
-            raise RuntimeError('Music observer exited')
-        return parse_sample(line)
+            if remaining <= 0 or not ready:
+                self.close()
+                raise RuntimeError(
+                    'Music query timed out. Check Automation access and Music.'
+                )
+            chunk = os.read(self.process.stdout.fileno(), 65536)
+            if not chunk:
+                self.close()
+                raise RuntimeError('Music observer exited')
+            self.buffer.extend(chunk)
+
+        end = self.buffer.index(b'\n') + 1
+        line = bytes(self.buffer[:end])
+        del self.buffer[:end]
+        return line
 
 
 def parse_sample(line: bytes) -> Sample:
