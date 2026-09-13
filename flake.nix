@@ -58,9 +58,28 @@
             check-yaml.enable = true;
             end-of-file-fixer.enable = true;
             trim-trailing-whitespace.enable = true;
+
+            cspell = {
+              enable = true;
+              args = [
+                "--no-progress"
+                "--no-must-find-files"
+              ];
+            };
+            markdownlint = {
+              enable = true;
+              args = [ "--fix" ];
+            };
+            prettier = {
+              enable = true;
+              settings.write = true;
+              files = "\\.(js|json|jsonc|yaml|yml)$";
+            };
+
             nixfmt.enable = true;
             statix.enable = true;
             deadnix.enable = true;
+
             ruff.enable = true;
             ruff-format.enable = true;
             mypy = {
