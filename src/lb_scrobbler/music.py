@@ -4,6 +4,7 @@ import json
 import math
 import select
 import subprocess
+from contextlib import closing
 from pathlib import Path
 
 from .tracking import Sample
@@ -57,7 +58,11 @@ class MusicReader:
 def parse_sample(line: bytes) -> Sample:
     try:
         data = json.loads(line)
+        if not isinstance(data, dict):
+            raise ValueError('Expected a playback object')
         if 'error' in data:
+            if not isinstance(data['error'], str):
+                raise ValueError('Expected an error message')
             raise RuntimeError(data['error'])
         sample = Sample(**data)
         if not isinstance(sample.state, str) or not all(
@@ -65,7 +70,7 @@ def parse_sample(line: bytes) -> Sample:
         ):
             raise ValueError('Invalid metadata')
         if not all(
-            isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
+            type(value) in (int, float) and math.isfinite(value) and value >= 0
             for value in (sample.duration, sample.position)
         ):
             raise ValueError('Invalid playback position or duration')
@@ -75,8 +80,5 @@ def parse_sample(line: bytes) -> Sample:
 
 
 def read_sample() -> Sample:
-    reader = MusicReader()
-    try:
+    with closing(MusicReader()) as reader:
         return reader.read()
-    finally:
-        reader.close()

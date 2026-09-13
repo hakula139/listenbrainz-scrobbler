@@ -76,3 +76,16 @@ def test_network_failure_retains_original_listen(queued):
     ) as http:
         assert send_one(queued, http, 2000) == 10
     assert queued.next(2010)[1] == original
+
+
+@pytest.mark.parametrize('value', ['nan', 'inf', '-5', 'invalid'])
+def test_invalid_rate_limit_delay_uses_finite_backoff(queued, value):
+    with httpx.Client(
+        base_url='https://api.listenbrainz.org/1/',
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(429, headers={'Retry-After': value})
+        ),
+    ) as http:
+        assert send_one(queued, http, 2000) == 60
+    assert queued.next(2059) is None
+    assert queued.next(2060) is not None

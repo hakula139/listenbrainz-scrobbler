@@ -4,6 +4,7 @@ function snapshot(music) {
     if (!music.running()) return { state: 'stopped' };
     const state = music.playerState();
     if (state !== 'playing' && state !== 'paused') return { state: state };
+
     const track = music.currentTrack;
     const sample = {
         state: state,
@@ -13,6 +14,7 @@ function snapshot(music) {
         duration: track.duration(),
         position: music.playerPosition()
     };
+
     if (music.currentTrack.name() !== sample.title) return { state: 'unavailable' };
     return sample;
 }
@@ -25,11 +27,15 @@ function run() {
         try {
             result = snapshot(music);
         } catch (error) {
-            result = { error: String(error).includes('-1743')
-                ? 'Music Automation access denied (-1743)'
-                : 'Music scripting query failed' };
+            result = {
+                error: String(error).includes('-1743')
+                    ? 'Music Automation access denied (-1743)'
+                    : 'Music scripting query failed'
+            };
         }
-        output.writeData($(JSON.stringify(result) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
+
+        const line = $(JSON.stringify(result) + '\n');
+        output.writeData(line.dataUsingEncoding($.NSUTF8StringEncoding));
         delay(2);
     }
 }

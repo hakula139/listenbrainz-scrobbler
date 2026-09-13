@@ -2,7 +2,9 @@
 
 import json
 import logging
+import math
 import time
+from contextlib import closing
 from pathlib import Path
 from threading import Event
 from typing import cast
@@ -53,22 +55,16 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
     except httpx.TransportError:
         store.fail(key, 'Network request failed', now + delay)
         return delay
-    if response.status_code == 200:
-        store.acknowledge(key)
-        logging.info('Submitted listen %s', key)
-        return 1
-    if response.status_code == 429:
-        raw = response.headers.get('Retry-After') or response.headers.get(
-            'X-RateLimit-Reset-In', '60'
-        )
-        try:
-            delay = max(1, float(raw))
-            if not 0 < delay < float('inf'):
-                delay = 60
-        except ValueError:
-            delay = 60
-    elif response.status_code in (401, 403):
-        delay = 300
+    match response.status_code:
+        case 200:
+            store.acknowledge(key)
+            logging.info('Submitted listen %s', key)
+            return 1
+        case 429:
+            delay = rate_limit_delay(response)
+        case 401 | 403:
+            delay = 300
+
     blocked = response.status_code in (400, 404, 413, 422)
     error = f'HTTP {response.status_code}'
     store.fail(key, error, now + delay, blocked)
@@ -78,11 +74,18 @@ def send_one(store: Store, http: httpx.Client, now: float) -> float:
     return delay
 
 
-def sender(path: Path, token: str, stop: Event) -> None:
-    store = Store(path)
+def rate_limit_delay(response: httpx.Response) -> float:
+    raw = response.headers.get('Retry-After') or response.headers.get(
+        'X-RateLimit-Reset-In', '60'
+    )
     try:
-        with client(token) as http:
-            while not stop.is_set():
-                stop.wait(send_one(store, http, time.time()))
-    finally:
-        store.close()
+        delay = float(raw)
+    except ValueError:
+        return 60
+    return max(1, delay) if math.isfinite(delay) and delay >= 0 else 60
+
+
+def sender(path: Path, token: str, stop: Event) -> None:
+    with closing(Store(path)) as store, client(token) as http:
+        while not stop.is_set():
+            stop.wait(send_one(store, http, time.time()))

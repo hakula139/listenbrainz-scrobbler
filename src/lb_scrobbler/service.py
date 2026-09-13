@@ -29,7 +29,7 @@ def loaded() -> bool:
 def stop() -> None:
     if loaded():
         subprocess.run(['launchctl', 'bootout', f'{domain()}/{LABEL}'], check=True)
-        deadline = time.monotonic() + 20
+        deadline = time.monotonic() + 90
         while loaded():
             if time.monotonic() >= deadline:
                 raise RuntimeError('Previous launch agent has not finished stopping')
@@ -49,7 +49,7 @@ def install(dry_run: bool) -> None:
         'RunAtLoad': True,
         'KeepAlive': {'SuccessfulExit': False},
         'ThrottleInterval': 30,
-        'ExitTimeOut': 10,
+        'ExitTimeOut': 80,
         'ProcessType': 'Background',
         'StandardOutPath': str(STATE / 'service.log'),
         'StandardErrorPath': str(STATE / 'service.log'),
