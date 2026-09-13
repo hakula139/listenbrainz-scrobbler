@@ -75,7 +75,7 @@ imports = [ inputs.listenbrainz-scrobbler.homeManagerModules.default ];
 services.listenbrainz-scrobbler.enable = true;
 ```
 
-Before switching from the manual installer, run `lb-scrobbler uninstall` using the existing installation. This removes its unmanaged plist while preserving the queue and Keychain token. Activate Home Manager, then check `lb-scrobbler status`. The package path changes, so macOS may request Automation or Keychain access again. Use `lb-scrobbler auth` if no token is stored yet.
+Home Manager replaces the manual installer's LaunchAgent under the same label while preserving the queue and Keychain token. Activate Home Manager, then check `lb-scrobbler status` to confirm the agent loaded and observations are fresh. The package path changes, so macOS may request Automation or Keychain access again. Use `lb-scrobbler auth` if no token is stored yet.
 
 The LaunchAgent starts at user login after a reboot, when Music and the login Keychain are available. Home Manager owns its lifecycle after migration. Disable the module and reactivate Home Manager to remove it. The existing Keychain entry keeps credentials outside the Nix store.
 

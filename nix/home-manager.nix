@@ -27,9 +27,11 @@ in
       }
     ];
     home.packages = [ cfg.package ];
-    home.activation.listenbrainzScrobbler = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      run install -d -m 0700 ${lib.escapeShellArg stateDir}
-    '';
+    home.activation.listenbrainzScrobbler =
+      lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "writeBoundary" ]
+        ''
+          run install -d -m 0700 ${lib.escapeShellArg stateDir}
+        '';
     launchd.agents.listenbrainz-scrobbler = {
       enable = true;
       config = {
