@@ -16,7 +16,7 @@ from pathlib import Path
 from . import service
 from .client import sender, validate_token
 from .credentials import load_token, save_token
-from .music import read_sample
+from .music import MusicReader, read_sample
 from .store import Store
 from .tracking import Sample
 
@@ -46,15 +46,14 @@ def _run(dry_run: bool):
         worker = threading.Thread(target=sender, args=(path, token, stop), daemon=True)
         worker.start()
     previous_error = None
-    first_query = True
+    reader = MusicReader()
     logging.info('Started in %s mode', 'dry-run' if dry_run else 'submission')
     try:
         while not stop.is_set():
             began = time.monotonic()
             error = None
             try:
-                sample = read_sample(timeout=60 if first_query else 8)
-                first_query = False
+                sample = reader.read()
             except RuntimeError as exc:
                 error = str(exc)
                 sample = Sample('unavailable')
@@ -85,6 +84,7 @@ def _run(dry_run: bool):
             stop.wait(max(0, 2 - (time.monotonic() - began)))
     finally:
         stop.set()
+        reader.close()
         if worker:
             worker.join(timeout=12)
         store.close()

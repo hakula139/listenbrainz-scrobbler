@@ -1,19 +1,35 @@
-const music = Application("com.apple.Music");
-if (!music.running()) {
-  JSON.stringify({ state: "stopped" });
-} else {
-  const state = music.playerState();
-  if (state !== "playing" && state !== "paused") {
-    JSON.stringify({ state: state });
-  } else {
+ObjC.import('Foundation');
+
+function snapshot(music) {
+    if (!music.running()) return { state: 'stopped' };
+    const state = music.playerState();
+    if (state !== 'playing' && state !== 'paused') return { state: state };
     const track = music.currentTrack;
-    JSON.stringify({
-      state: state,
-      title: track.name(),
-      artist: track.artist(),
-      album: track.album(),
-      duration: track.duration(),
-      position: music.playerPosition(),
-    });
-  }
+    const sample = {
+        state: state,
+        title: track.name(),
+        artist: track.artist(),
+        album: track.album(),
+        duration: track.duration(),
+        position: music.playerPosition()
+    };
+    if (music.currentTrack.name() !== sample.title) return { state: 'unavailable' };
+    return sample;
+}
+
+function run() {
+    const music = Application('com.apple.Music');
+    const output = $.NSFileHandle.fileHandleWithStandardOutput;
+    while (true) {
+        let result;
+        try {
+            result = snapshot(music);
+        } catch (error) {
+            result = { error: String(error).includes('-1743')
+                ? 'Music Automation access denied (-1743)'
+                : 'Music scripting query failed' };
+        }
+        output.writeData($(JSON.stringify(result) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
+        delay(2);
+    }
 }

@@ -1,34 +1,62 @@
-"""Read Music.app through its public scripting dictionary."""
+"""Read Music.app through a persistent scripting process."""
 
 import json
 import math
+import select
 import subprocess
 from pathlib import Path
 
 from .tracking import Sample
 
 
-def read_sample(timeout: float = 8) -> Sample:
+class MusicReader:
+    def __init__(self):
+        self.process = None
+
+    def close(self):
+        if self.process:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+            self.process.stdout.close()
+            self.process = None
+
+    def read(self) -> Sample:
+        timeout = 10
+        if self.process is None:
+            # Reusing OSA avoids repeated, costly macOS input-method initialization.
+            self.process = subprocess.Popen(
+                [
+                    '/usr/bin/osascript',
+                    '-l',
+                    'JavaScript',
+                    str(Path(__file__).with_name('music.js')),
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            timeout = 60
+        ready, _, _ = select.select([self.process.stdout], [], [], timeout)
+        if not ready:
+            self.close()
+            raise RuntimeError(
+                'Music query timed out. Check Automation access and Music.'
+            )
+        line = self.process.stdout.readline()
+        if not line:
+            self.close()
+            raise RuntimeError('Music observer exited')
+        return parse_sample(line)
+
+
+def parse_sample(line: bytes) -> Sample:
     try:
-        result = subprocess.run(
-            [
-                '/usr/bin/osascript',
-                '-l',
-                'JavaScript',
-                str(Path(__file__).with_name('music.js')),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise RuntimeError('Music query timed out. Check Automation consent') from error
-    if result.returncode:
-        if '-1743' in result.stderr:
-            raise RuntimeError('Music Automation access denied (-1743)')
-        raise RuntimeError('Music scripting query failed')
-    try:
-        data = json.loads(result.stdout)
+        data = json.loads(line)
+        if 'error' in data:
+            raise RuntimeError(data['error'])
         sample = Sample(**data)
         if not isinstance(sample.state, str) or not all(
             isinstance(value, str) for value in sample.identity
@@ -42,3 +70,11 @@ def read_sample(timeout: float = 8) -> Sample:
         return sample
     except (ValueError, TypeError) as error:
         raise RuntimeError('Music returned invalid playback metadata') from error
+
+
+def read_sample() -> Sample:
+    reader = MusicReader()
+    try:
+        return reader.read()
+    finally:
+        reader.close()
