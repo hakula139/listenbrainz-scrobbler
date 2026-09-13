@@ -18,7 +18,7 @@ Run the checks in [AGENTS.md](../../../AGENTS.md). Build candidates into an empt
 
 ## Publish
 
-After the release PR is approved and merged, create an annotated `v<version>` tag on the merged commit. Copy the reviewed changelog section, including its link definitions, to a temporary notes file and pass it to `git tag -a vX.Y.Z -F <notes-file>`. The release workflow takes GitHub release notes from that annotation. Push the tag when publication is authorized for this release.
+After the release PR is approved and merged, create an annotated `v<version>` tag on the merged commit. Copy the reviewed changelog section, including its link definitions, to a temporary notes file and pass it to `git tag -a vX.Y.Z -F <notes-file> <merged-commit>`. The release workflow takes GitHub release notes from that annotation. Push the tag when publication is authorized for this release.
 
 The tag workflow checks Linux and macOS, builds distributions, publishes GitHub assets and `SHA256SUMS`, then uploads those same verified files to PyPI through Trusted Publishing. The PyPI publisher matches this repository, `release.yml`, and the `pypi` GitHub environment.
 
