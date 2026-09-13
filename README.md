@@ -1,5 +1,10 @@
 # listenbrainz-scrobbler
 
+[![CI](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/listenbrainz-scrobbler)](https://pypi.org/project/listenbrainz-scrobbler/)
+[![Python](https://img.shields.io/badge/python-3.13%2B-blue)](https://pypi.org/project/listenbrainz-scrobbler/)
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](#setup)
+
 A background service that submits Apple Music playback on macOS to ListenBrainz. It uses Music.app's scripting interface and a user LaunchAgent. No App Store purchase or developer signing certificate is required.
 
 ## Setup
