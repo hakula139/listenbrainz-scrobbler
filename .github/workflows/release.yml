@@ -3,12 +3,18 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag to publish to PyPI
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -16,6 +22,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   publish:
+    if: github.event_name == 'push'
     needs: check
     runs-on: ubuntu-latest
     permissions:
@@ -50,3 +57,35 @@ jobs:
         run: |
           gh release create "$RELEASE_TAG" dist/*.whl dist/*.tar.gz dist/SHA256SUMS \
             --verify-tag --title "$RELEASE_TAG" --notes-from-tag
+
+  publish-pypi:
+    needs: [check, publish]
+    if: >-
+      !cancelled() && needs.check.result == 'success' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/listenbrainz-scrobbler/
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          version: '0.12.13'
+          enable-cache: false
+      - name: Download released distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo "$GITHUB_REPOSITORY" --dir dist \
+            --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS -- "$RELEASE_TAG"
+      - name: Verify checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always

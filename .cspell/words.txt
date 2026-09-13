@@ -16,6 +16,7 @@ osascript
 pkgs
 pname
 pycache
+pypi
 pyproject
 pytest
 scrobbler
