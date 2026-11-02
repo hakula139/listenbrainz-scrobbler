@@ -73,7 +73,7 @@ Polling cannot distinguish a natural repeat from manually seeking from the very 
 Add a versioned flake input such as `github:hakula139/listenbrainz-scrobbler/v0.2.0`, then import the module in your Home Manager configuration:
 
 ```nix
-imports = [ inputs.listenbrainz-scrobbler.homeManagerModules.default ];
+imports = [ inputs.listenbrainz-scrobbler.homeModules.default ];
 services.listenbrainz-scrobbler.enable = true;
 ```
 
