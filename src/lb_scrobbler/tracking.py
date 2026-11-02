@@ -1,9 +1,13 @@
 """Count observed playback, excluding seeks and gaps between observations."""
 
 from dataclasses import asdict, dataclass, replace
+from importlib.metadata import version
 from typing import Any
 from uuid import uuid4
 
+
+SUBMISSION_CLIENT = 'listenbrainz-scrobbler'
+SUBMISSION_CLIENT_VERSION = version(SUBMISSION_CLIENT)
 
 MAX_GAP = 10.0
 POSITION_TOLERANCE = 2.0
@@ -26,8 +30,8 @@ class Sample:
             'additional_info': {
                 'duration_ms': round(self.duration * 1000),
                 'media_player': 'Apple Music',
-                'submission_client': 'listenbrainz-scrobbler',
-                'submission_client_version': '0.2.0',
+                'submission_client': SUBMISSION_CLIENT,
+                'submission_client_version': SUBMISSION_CLIENT_VERSION,
             },
         }
 

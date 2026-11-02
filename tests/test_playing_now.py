@@ -1,6 +1,8 @@
 import json
+import tomllib
 from contextlib import nullcontext
 from dataclasses import replace
+from pathlib import Path
 from unittest.mock import Mock
 
 import httpx
@@ -10,6 +12,10 @@ from lb_scrobbler.client import PlayingNowSender, sender
 from lb_scrobbler.playback import PlaybackState
 from lb_scrobbler.store import Store
 from lb_scrobbler.tracking import Sample, Session, Tracker
+
+
+with (Path(__file__).parents[1] / 'pyproject.toml').open('rb') as file:
+    PROJECT_VERSION = tomllib.load(file)['project']['version']
 
 
 def session(state='playing', title='Track', key='session'):
@@ -66,7 +72,7 @@ def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requ
                                 'duration_ms': 120000,
                                 'media_player': 'Apple Music',
                                 'submission_client': 'listenbrainz-scrobbler',
-                                'submission_client_version': '0.2.0',
+                                'submission_client_version': PROJECT_VERSION,
                             },
                         },
                     }
