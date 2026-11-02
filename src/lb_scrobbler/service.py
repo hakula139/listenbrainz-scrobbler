@@ -12,19 +12,21 @@ from .credentials import load_token
 
 
 LABEL = 'xyz.hakula.listenbrainz-scrobbler'
+PLIST = Path.home() / 'Library/LaunchAgents' / f'{LABEL}.plist'
+DOMAIN = f'gui/{os.getuid()}'
+TARGET = f'{DOMAIN}/{LABEL}'
+EXIT_TIMEOUT = 80
+
 STATE = Path.home() / 'Library/Application Support/listenbrainz-scrobbler'
 DATABASE = 'state.sqlite3'
 DRY_RUN_DATABASE = 'dry-run.sqlite3'
 STATUS = 'status.json'
-PLIST = Path.home() / 'Library/LaunchAgents' / f'{LABEL}.plist'
+
 NIX_STORE = Path('/nix/store')
 HOME_MANAGER_PROGRAM = 'lb-scrobbler'
 HOME_MANAGER_MODULE = (
     'Home Manager module (homeModules.default, services.listenbrainz-scrobbler.enable)'
 )
-DOMAIN = f'gui/{os.getuid()}'
-TARGET = f'{DOMAIN}/{LABEL}'
-EXIT_TIMEOUT = 80
 
 
 def from_nix_store() -> bool:

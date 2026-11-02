@@ -23,27 +23,6 @@ API = 'https://api.listenbrainz.org/1/'
 BLOCKED_STATUS_CODES = frozenset({400, 404, 413, 422})
 
 
-@dataclass(frozen=True)
-class Failure:
-    error: str
-    blocked: bool
-    cooldown: float
-    retry_in: float
-
-
-def classify(response: httpx.Response | None, attempts: int) -> Failure:
-    delay = retry_delay(attempts)
-    cooldown = api_cooldown(response) if response is not None else 0
-
-    if response is None:
-        error = 'Network request failed'
-        blocked = False
-    else:
-        error = f'HTTP {response.status_code}'
-        blocked = response.status_code in BLOCKED_STATUS_CODES
-    return Failure(error, blocked, cooldown, cooldown or delay)
-
-
 def api_client(token: str) -> httpx.Client:
     return httpx.Client(
         base_url=API,
@@ -130,6 +109,28 @@ def rate_limit_delay(response: httpx.Response) -> float:
     return max(1, delay) if math.isfinite(delay) and delay >= 0 else 60
 
 
+@dataclass(frozen=True)
+class Failure:
+    error: str
+    blocked: bool
+    cooldown: float
+    retry_in: float
+
+
+def classify(response: httpx.Response | None, attempts: int) -> Failure:
+    delay = retry_delay(attempts)
+    if response is None:
+        return Failure('Network request failed', False, 0, delay)
+
+    cooldown = api_cooldown(response)
+    return Failure(
+        f'HTTP {response.status_code}',
+        response.status_code in BLOCKED_STATUS_CODES,
+        cooldown,
+        cooldown or delay,
+    )
+
+
 class PlayingNowSender:
     """Keep this client's playing-now entry fresh and clear only its own entry.
 
@@ -154,16 +155,14 @@ class PlayingNowSender:
         self.announced = False
         self.synchronized = False
 
-    def update_generation(self, generation: int) -> None:
+    def current_playback(self, now: float) -> Playback | None:
+        current = self.playback.current(now)
+        generation = current.generation if current else 0
         if generation != self.generation:
             self.generation = generation
             self.attempts = 0
             self.retry_at = 0.0
             self.blocked = False
-
-    def current_playback(self, now: float) -> Playback | None:
-        current = self.playback.current(now)
-        self.update_generation(current.generation if current else 0)
         return current
 
     def send(self, http: httpx.Client, now: float) -> float:
@@ -209,7 +208,7 @@ class PlayingNowSender:
             if response is None or response.status_code >= 500:
                 self.announced = True
                 self.synchronized = False
-            return self.fail(classify(response, self.attempts), now)
+            return self.fail(response, now)
 
         title_artist = (current.sample.title, current.sample.artist)
         if title_artist != self.title_artist or now >= self.refresh_at:
@@ -224,14 +223,16 @@ class PlayingNowSender:
 
     def clear(self, http: httpx.Client, now: float) -> float:
         self.synchronized = False
+        response: httpx.Response | None
         try:
             response = http.post(
                 'playing-now/delete', json={'client': SUBMISSION_CLIENT}
             )
         except httpx.TransportError:
-            return self.fail(classify(None, self.attempts), now)
-        if response.status_code not in (200, 404):
-            return self.fail(classify(response, self.attempts), now)
+            response = None
+
+        if response is None or response.status_code not in (200, 404):
+            return self.fail(response, now)
 
         self.announced = False
         self.synchronized = True
@@ -240,7 +241,8 @@ class PlayingNowSender:
         logger.info('Cleared playing-now update')
         return 0
 
-    def fail(self, failure: Failure, now: float) -> float:
+    def fail(self, response: httpx.Response | None, now: float) -> float:
+        failure = classify(response, self.attempts)
         self.retry_at = now + failure.retry_in
         self.attempts += 1
         self.blocked = failure.blocked

@@ -31,6 +31,13 @@ def test_qualifies_at_half_duration_capped_at_four_minutes(duration, threshold):
     assert payload is not None
 
 
+def test_zero_duration_track_never_qualifies():
+    tracker = Tracker()
+
+    assert play(tracker, duration=0) == []
+    assert tracker.session is None
+
+
 def test_payload_metadata_and_single_listen():
     tracker = Tracker()
     assert play(tracker, end=48) == []
@@ -76,6 +83,15 @@ def test_pause_seek_and_sleep_do_not_count():
     assert tracker.session.seconds == 12
 
 
+def test_advance_credits_only_elapsed_time():
+    tracker = Tracker()
+    tracker.observe(sample(0), 1000)
+
+    tracker.observe(sample(3), 1002)
+
+    assert tracker.session.seconds == 2
+
+
 def test_transient_read_failure_does_not_credit_the_gap():
     tracker = Tracker()
     play(tracker, end=10)
@@ -94,11 +110,16 @@ def test_repeat_creates_a_new_listen():
     assert second['listened_at'] == 1100
 
 
-def test_backward_seek_does_not_duplicate_qualified_track():
+@pytest.mark.parametrize(
+    ('end', 'seek'),
+    [(60, 0), (96, 4)],
+    ids=['start', 'near-end'],
+)
+def test_backward_seek_does_not_duplicate_qualified_track(end, seek):
     tracker = Tracker()
-    play(tracker, end=60)
+    play(tracker, end=end)
 
-    assert play(tracker, offset=1062) == []
+    assert play(tracker, start=seek, end=end, offset=1000 + end + 2 - seek) == []
 
 
 def test_track_change_and_stop_reset_progress():

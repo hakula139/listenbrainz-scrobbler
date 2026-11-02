@@ -64,18 +64,18 @@ class Store:
         ).fetchone()
         return Pending(*row) if row else None
 
-    def acknowledge(self, key: str) -> None:
+    def acknowledge(self, session_id: str) -> None:
         with self.db:
-            self.db.execute('DELETE FROM outbox WHERE id = ?', (key,))
+            self.db.execute('DELETE FROM outbox WHERE id = ?', (session_id,))
 
     def fail(
-        self, key: str, error: str, retry_at: float, blocked: bool = False
+        self, session_id: str, error: str, retry_at: float, blocked: bool = False
     ) -> None:
         with self.db:
             self.db.execute(
                 'UPDATE outbox SET attempts = attempts + 1, error = ?, '
                 'retry_at = ?, blocked = ? WHERE id = ?',
-                (error, retry_at, blocked, key),
+                (error, retry_at, blocked, session_id),
             )
 
     def status(self) -> dict[str, Any]:
@@ -89,6 +89,7 @@ class Store:
                 'SELECT DISTINCT error FROM outbox WHERE error IS NOT NULL'
             )
         ]
+
         return {
             'pending': pending,
             'blocked': blocked,

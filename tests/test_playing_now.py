@@ -8,6 +8,7 @@ from unittest.mock import Mock
 import httpx
 import pytest
 import support
+from packaging.version import Version
 
 from lb_scrobbler.client import PlayingNowSender, submit_listens
 from lb_scrobbler.playback import PlaybackState
@@ -51,6 +52,9 @@ def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requ
     playback.update(support.session(), 12)
     playing.send(http, 12)
 
+    info = requests[1][1]['payload'][0]['track_metadata']['additional_info']
+    assert Version(info.pop('submission_client_version')) == Version(PROJECT_VERSION)
+
     assert requests == [
         ('/1/playing-now/delete', {'client': 'listenbrainz-scrobbler'}),
         (
@@ -67,7 +71,6 @@ def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requ
                                 'duration_ms': 120000,
                                 'media_player': 'Apple Music',
                                 'submission_client': 'listenbrainz-scrobbler',
-                                'submission_client_version': PROJECT_VERSION,
                             },
                         },
                     }
@@ -133,24 +136,27 @@ def test_repeat_and_album_change_preserve_server_expiry(playback, http, requests
     )
 
 
-def test_blocked_playback_resumes_only_for_a_new_session(playback, requests):
+def test_blocked_playback_resumes_only_for_a_new_session(playback):
+    paths = []
+
     def respond(request):
-        requests.append(request.url.path)
+        paths.append(request.url.path)
         if request.url.path.endswith('/playing-now/delete'):
             return httpx.Response(200)
         return httpx.Response(400)
 
     playing = PlayingNowSender(playback)
     with support.mock_http(respond) as http:
-        playback.update(support.session(), 10)
-        playing.send(http, 10)
-        playing.send(http, 20)
-        assert requests.count('/1/submit-listens') == 1
+        for now in range(10, 62, 2):
+            playback.update(support.session(), now)
+            playing.send(http, now)
 
-        playback.update(support.session(title='Next', key='next'), 21)
-        playing.send(http, 21)
+        assert paths.count('/1/submit-listens') == 1
 
-    assert requests.count('/1/submit-listens') == 2
+        playback.update(support.session(title='Next', key='next'), 62)
+        playing.send(http, 62)
+
+    assert paths.count('/1/submit-listens') == 2
 
 
 def test_failed_old_track_is_replaced_and_current_failure_backs_off(playback):
@@ -205,12 +211,12 @@ def test_uncertain_submission_is_cleared_but_failed_clear_is_superseded(playback
     ]
 
 
-def test_clear_does_not_retry_when_another_client_owns_notification(playback):
+def test_clear_accepts_404_when_another_client_owns_notification(playback):
     paths = []
 
     def respond(request):
         paths.append(request.url.path)
-        return httpx.Response(200 if len(paths) <= 2 else 404)
+        return httpx.Response(404 if len(paths) == 3 else 200)
 
     playing = PlayingNowSender(playback)
     with support.mock_http(respond) as http:
@@ -218,12 +224,15 @@ def test_clear_does_not_retry_when_another_client_owns_notification(playback):
         playing.send(http, 10)
         playback.update(None, 12)
         playing.send(http, 12)
-        playing.send(http, 100)
+
+        playback.update(support.session(title='Next', key='next'), 102)
+        playing.send(http, 102)
 
     assert paths == [
         '/1/playing-now/delete',
         '/1/submit-listens',
         '/1/playing-now/delete',
+        '/1/submit-listens',
     ]
 
 
@@ -244,10 +253,12 @@ def test_worker_applies_shared_cooldown_before_queued_listens(
     stop.is_set.side_effect = [False, True]
     monkeypatch.setattr('lb_scrobbler.client.time.monotonic', lambda: 10)
     monkeypatch.setattr('lb_scrobbler.client.send_one', queued)
+
     with support.mock_http(respond) as http:
         monkeypatch.setattr(
             'lb_scrobbler.client.api_client', lambda _: nullcontext(http)
         )
+
         submit_listens(tmp_path / 'state.sqlite3', 'test-token', stop, playback)
 
     queued.assert_not_called()
@@ -273,6 +284,7 @@ def test_refresh_waits_for_server_expiry_after_slow_request(playback, monkeypatc
             playback.update(support.session(), now)
         playing.send(http, 131)
         assert len(posted) == 1
+
         playback.update(support.session(), 136)
         playing.send(http, 136)
 
@@ -282,10 +294,9 @@ def test_refresh_waits_for_server_expiry_after_slow_request(playback, monkeypatc
 def test_queued_network_backoff_does_not_delay_next_track(
     store_path, playback, monkeypatch
 ):
-    path = store_path
     current = support.session()
     tracker = Tracker(current)
-    with closing(Store(path)) as store:
+    with closing(Store(store_path)) as store:
         store.checkpoint(tracker, current.payload())
 
     sent = []
@@ -315,11 +326,13 @@ def test_queued_network_backoff_does_not_delay_next_track(
         playback.update(support.session(title='Next', key='next'), clock[0])
 
     stop.wait.side_effect = wait
+
     with support.mock_http(respond) as http:
         monkeypatch.setattr(
             'lb_scrobbler.client.api_client', lambda _: nullcontext(http)
         )
-        submit_listens(path, 'test-token', stop, playback)
+
+        submit_listens(store_path, 'test-token', stop, playback)
 
     assert sent == [
         ('playing_now', 'Track'),
@@ -327,7 +340,7 @@ def test_queued_network_backoff_does_not_delay_next_track(
         ('playing_now', 'Next'),
     ]
 
-    with closing(Store(path)) as store:
+    with closing(Store(store_path)) as store:
         assert store.next(2009) is None
         assert json.loads(store.next(2010).payload)['listened_at'] == 1000
 
@@ -367,6 +380,7 @@ def test_unknown_existing_expiry_is_reset_before_publishing(
             playback.update(support.session(), now)
             playing.send(http, now)
             if now > 70:
+                # Two-second polling allows a brief interval at the TTL boundary.
                 assert cached['expires_at'] >= now - 2
 
     assert operations[:2] == ['delete', 'submit']

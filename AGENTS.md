@@ -27,7 +27,7 @@ Run `nix develop` once in each new checkout or worktree to generate the pre-comm
 ```sh
 uv sync --locked
 pre-commit run --all-files   # Every hook, including ruff, and the uv-backed mypy and pytest
-nix flake check              # The hooks in the sandbox, plus the package and module on macOS
+nix flake check              # The hooks except mypy and pytest in the sandbox, plus the package, its tests, and the module on macOS
 uv build
 ```
 
@@ -37,6 +37,6 @@ No automated check activates the service or reads Music. For a change to Music o
 
 ## Releases
 
-The squash commit uses the PR title as its draft changelog entry, so write the title for users and mark a break of the [stability surface](RELEASING.md#stability-surface) with `!`.
+PR titles become draft changelog entries, so write them for users and mark a break of the [stability surface](RELEASING.md#stability-surface) with `!`.
 
 Use absolute GitHub URLs for repository files in README links so they work on PyPI. Follow [RELEASING.md](RELEASING.md) for releases.

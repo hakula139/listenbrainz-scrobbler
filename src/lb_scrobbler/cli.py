@@ -33,15 +33,15 @@ def build_parser() -> argparse.ArgumentParser:
         help='Read the existing SmashTunes token without displaying it',
     )
 
-    dry_run = argparse.ArgumentParser(add_help=False)
-    dry_run.add_argument(
+    dry_run_option = argparse.ArgumentParser(add_help=False)
+    dry_run_option.add_argument(
         '--dry-run',
         action='store_true',
         help='Observe and queue locally without network submissions',
     )
-    commands.add_parser('run', parents=[dry_run], help='Run in the foreground')
+    commands.add_parser('run', parents=[dry_run_option], help='Run in the foreground')
     commands.add_parser(
-        'install', parents=[dry_run], help='Install and start the launch agent'
+        'install', parents=[dry_run_option], help='Install and start the launch agent'
     )
 
     commands.add_parser('status', help='Show the last observation and queue status')

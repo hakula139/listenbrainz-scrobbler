@@ -104,7 +104,6 @@ class Tracker:
         if current.state == 'unavailable':
             if self.session is not None:
                 self.session.sample = replace(self.session.sample, state='unavailable')
-                self.session.observed_at = now
             return None
 
         if current.state not in ('playing', 'paused') or not (
@@ -134,9 +133,8 @@ class Tracker:
             return None
 
         previous.advance(current, now)
-        if not previous.queued and previous.seconds >= min(
-            current.duration / 2, LISTEN_THRESHOLD_CAP
-        ):
+        threshold = min(current.duration / 2, LISTEN_THRESHOLD_CAP)
+        if not previous.queued and previous.seconds >= threshold:
             previous.queued = True
             return previous.payload()
         return None

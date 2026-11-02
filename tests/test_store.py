@@ -53,5 +53,7 @@ def test_blocked_payload_is_retained_for_manual_retry(store):
 
     assert store.next(2000) is None
     assert store.status()['errors'] == ['HTTP 400']
+
     store.retry()
+
     assert store.next(2000).id == current.id

@@ -33,7 +33,7 @@ only-include = [
 ]
 
 [dependency-groups]
-dev = ["mypy>=2.4.1", "pytest>=9.1.1"]
+dev = ["mypy>=2.4.1", "packaging>=26.3", "pytest>=9.1.1"]
 
 [tool.ruff]
 src = ["src"]
@@ -54,5 +54,6 @@ testpaths = ["tests"]
 
 [tool.mypy]
 strict = true
+python_version = "3.13"
 files = ["src"]
 untyped_calls_exclude = ["keyring.backends.macOS"]
