@@ -22,7 +22,7 @@ Only one process may own the tracker, including dry runs. Use `probe` for observ
 
 ## Verification
 
-Enter `nix develop` to generate the pre-commit configuration and install its hooks. Change hook definitions in `flake.nix`. Keep the development shell's Python separate from the Python environment used by Nix hooks, so `uv run` does not resolve test dependencies from the hook environment.
+Enter `nix develop` to generate the pre-commit configuration and install its hooks. Change hook definitions in `flake.nix`. Keep the development shell's Python separate from the Python environment used by Nix hooks, so `uv run` does not resolve development dependencies from the hook environment.
 
 ```sh
 uv sync --locked

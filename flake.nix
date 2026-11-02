@@ -52,63 +52,67 @@
           p.httpx
           p.keyring
           p.mypy
-          p.pytest
         ]);
         package = pkgs.callPackage ./nix/package.nix { };
 
         # ----------------------------------------------------------------------
         # Pre-commit hooks
         # ----------------------------------------------------------------------
-        preCommitCheck = git-hooks-nix.lib.${system}.run {
+        hooks = {
+          actionlint.enable = true;
+          check-added-large-files.enable = true;
+          check-yaml.enable = true;
+          end-of-file-fixer.enable = true;
+          trim-trailing-whitespace.enable = true;
+
+          cspell = {
+            enable = true;
+            args = [
+              "--no-progress"
+              "--no-must-find-files"
+            ];
+          };
+          markdownlint = {
+            enable = true;
+            args = [ "--fix" ];
+          };
+          prettier = {
+            enable = true;
+            settings.write = true;
+            files = "\\.(js|json|jsonc|yaml|yml)$";
+          };
+
+          nixfmt.enable = true;
+          statix.enable = true;
+          deadnix.enable = true;
+
+          ruff.enable = true;
+          ruff-format.enable = true;
+          mypy = {
+            enable = true;
+            entry = "${python}/bin/mypy";
+            args = [ "src/lb_scrobbler" ];
+            pass_filenames = false;
+          };
+        };
+
+        preCommit = git-hooks-nix.lib.${system}.run {
           src = ./.;
-          hooks = {
-            actionlint.enable = true;
-            check-added-large-files.enable = true;
-            check-yaml.enable = true;
-            end-of-file-fixer.enable = true;
-            trim-trailing-whitespace.enable = true;
-
-            cspell = {
-              enable = true;
-              args = [
-                "--no-progress"
-                "--no-must-find-files"
-              ];
-            };
-            markdownlint = {
-              enable = true;
-              args = [ "--fix" ];
-            };
-            prettier = {
-              enable = true;
-              settings.write = true;
-              files = "\\.(js|json|jsonc|yaml|yml)$";
-            };
-
-            nixfmt.enable = true;
-            statix.enable = true;
-            deadnix.enable = true;
-
-            ruff.enable = true;
-            ruff-format.enable = true;
-            mypy = {
-              enable = true;
-              entry = "${python}/bin/mypy";
-              args = [ "src/lb_scrobbler" ];
-              pass_filenames = false;
-            };
+          hooks = hooks // {
             pytest = {
               enable = true;
-              entry = "${python}/bin/pytest";
-              args = [
-                "-q"
-                "-p"
-                "no:cacheprovider"
-              ];
+              entry = "${lib.getExe pkgs.uv} run --frozen pytest";
+              args = [ "-q" ];
               types = [ "python" ];
               pass_filenames = false;
             };
           };
+        };
+
+        # The pytest hook needs the uv environment, which the check sandbox lacks.
+        preCommitCheck = git-hooks-nix.lib.${system}.run {
+          src = ./.;
+          inherit hooks;
         };
 
         moduleCheck = home-manager.lib.homeManagerConfiguration {
@@ -143,12 +147,12 @@
         # Development shell
         # ----------------------------------------------------------------------
         devShells.default = pkgs.mkShell {
-          packages = preCommitCheck.enabledPackages ++ [
+          packages = preCommit.enabledPackages ++ [
             pkgs.git-cliff
             pkgs.python313
             pkgs.uv
           ];
-          inherit (preCommitCheck) shellHook;
+          inherit (preCommit) shellHook;
         };
         formatter = pkgs.nixfmt;
       }

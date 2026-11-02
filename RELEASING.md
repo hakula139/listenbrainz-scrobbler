@@ -48,7 +48,7 @@ The draft lists PR titles, which are too short to explain each change to users. 
 
 1. Branch off `main` as `chore/release-vX.Y.Z`.
 
-2. Set `version` in `pyproject.toml`, `submission_client_version` in `src/lb_scrobbler/tracking.py` and its expectation in `tests/test_playing_now.py`, and the versioned Nix example in `README.md`. Run `uv lock` and keep only the project version change.
+2. Set `version` in `pyproject.toml` and the versioned Nix example in `README.md`. Run `uv lock` and keep only the project version change.
 
 3. Inside the dev shell, which provides git-cliff, prepend the section:
 
@@ -72,7 +72,7 @@ The draft lists PR titles, which are too short to explain each change to users. 
 
 6. Run the [verification block](AGENTS.md#verification).
 
-7. Commit, then open a PR titled `chore(release): vX.Y.Z`. Record the checks in the PR's Test plan. The diff should touch only `pyproject.toml`, `uv.lock`, `src/lb_scrobbler/tracking.py`, `tests/test_playing_now.py`, `README.md`, `CHANGELOG.md`, and possibly `.cspell/words.txt`.
+7. Commit, then open a PR titled `chore(release): vX.Y.Z`. Record the checks in the PR's Test plan. The diff should touch only `pyproject.toml`, `uv.lock`, `README.md`, `CHANGELOG.md`, and possibly `.cspell/words.txt`.
 
 8. Merge after CI passes and the review is approved. If another PR merges first, recreate the branch from `main` and repeat the steps before curation, because updating the branch leaves a section that misses the new commit.
 
