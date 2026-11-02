@@ -1,6 +1,6 @@
 # AGENTS.md: listenbrainz-scrobbler
 
-Project-specific guidance for coding assistants. `CLAUDE.md` is a symlink to this file. Follow the user's global instructions for Git workflow, secret handling, and communication.
+`listenbrainz-scrobbler` is a user LaunchAgent that submits Apple Music listens on macOS to ListenBrainz, installed from PyPI with uv or through the Home Manager module. `CLAUDE.md` is a symlink to this file.
 
 ## Playback and persistence
 
@@ -8,39 +8,35 @@ Count observed playback only. Pauses, seeks, and observation gaps must not manuf
 
 Commit the playback checkpoint and newly qualified listen in the same SQLite transaction. Keep dry-run storage separate from the submission queue. Changes to tracking or persistence need regression tests for the affected repeat, restart, or interruption behavior.
 
-`music.js` runs through macOS JavaScript for Automation, so Node.js APIs and tooling that rewrites the runtime are unsuitable. Preserve the persistent scripting process: starting a new process for every sample repeatedly initializes macOS input services. Keep control-flow bodies braced, including single-line returns.
+`music.js` runs under macOS JavaScript for Automation, which has no Node.js APIs, so keep it free of Node.js modules and of build steps such as bundling or transpiling. Preserve the persistent scripting process: starting a new process for every sample repeatedly initializes macOS input services. Keep control-flow bodies braced, including single-line returns.
 
 Configure logging at the CLI boundary and use named loggers in other modules. Keep HTTP library logging quiet because request details can expose credentials. Log submission identifiers and sanitized failure details without tokens or raw request objects.
 
 ## Service integration
 
-Music automation and the login Keychain require a user session. Keep the service a user LaunchAgent that starts at login. A foreground probe does not prove that the background process has Automation permission, and a changed Python executable may require new consent. Leave launchd ProcessType at its default: Background throttling can delay observer startup for minutes under load and prevent timely playback sampling.
+Music automation and the login Keychain require a user session, so keep the service a user LaunchAgent that starts at login. A changed Python executable may require new Automation or Keychain consent. Leave launchd's `ProcessType` at its default, since `Background` throttling can delay observer startup for minutes under load and prevent timely playback sampling.
 
-The manual installer and Home Manager module share the LaunchAgent label, state directory, and Keychain entry so users can migrate without losing their queue or credentials. Keep those contracts aligned. In the Home Manager activation graph, create the state directory before `setupLaunchAgents`, since launchd must open the log files when starting the service.
+The manual installer in `service.py` and the Home Manager module share the LaunchAgent label, state directory, and Keychain entry, which lets users migrate without losing their queue or credentials. Keep those contracts and the agent's launchd keys aligned between the two.
 
-Only one process may own the tracker, including dry runs. Use `probe` for observation diagnostics while the service is running. Runtime checks must distinguish a loaded LaunchAgent from fresh observations and successful submission.
+Only one process may own the tracker, including dry runs. Use `probe` for observation diagnostics while the service is running, since `run` holds the tracker lock.
 
 ## Verification
 
-Enter `nix develop` to generate the pre-commit configuration and install its hooks. Change hook definitions in `flake.nix`. Keep the development shell's Python separate from the Python environment used by Nix hooks, so `uv run` does not resolve development dependencies from the hook environment.
+Run `nix develop` once in each new checkout or worktree to generate the pre-commit configuration and install its hooks.
 
 ```sh
 uv sync --locked
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src/lb_scrobbler
-uv run pytest -q
-pre-commit run --all-files
+pre-commit run --all-files   # Every hook, with mypy and pytest run through uv
+nix flake check              # The other hooks in the sandbox, plus the package, its tests, and the module on macOS
 uv build
-nix flake check
 ```
 
-For checkout-based development, prefix CLI commands with `uv run`, for example `uv run lb-scrobbler probe`. Installing an agent from the checkout records its `.venv` Python path, so keep that environment in place and rerun `install` after recreating or moving it.
+`uv run lb-scrobbler install` records the checkout's `.venv` Python in the agent, so rerun `install` after recreating or moving that environment.
 
-CI runs hooks and locked Python checks on Linux and macOS. Tests cover playback thresholds, interruptions, repeats, restart persistence, and HTTP retries without contacting ListenBrainz. Use focused checks while iterating. `nix flake check` builds the package and Home Manager activation script on macOS but does not activate the service or test Music access. For changes to Music observation, validate streamed playback outside the library and background Automation access separately on macOS. See [README.md](README.md) for setup and operation.
+No automated check activates the service or reads Music. For a change to Music observation, check on macOS that streamed tracks outside the library are observed and that the background agent has Automation access, which a foreground `probe` does not prove. A runtime check must tell a loaded LaunchAgent apart from fresh observations and successful submissions.
 
 ## Releases
 
-The squash commit uses the PR title as its draft changelog entry, so write the title for users and mark a stability-surface break with `!`.
+PR titles become draft changelog entries, so write them for users and mark a break of the [stability surface](RELEASING.md#stability-surface) with `!`.
 
 Use absolute GitHub URLs for repository files in README links so they work on PyPI. Follow [RELEASING.md](RELEASING.md) for releases.

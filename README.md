@@ -1,9 +1,9 @@
 # listenbrainz-scrobbler
 
-[![CI](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml)
+[![CI](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml/badge.svg)](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/listenbrainz-scrobbler)](https://pypi.org/project/listenbrainz-scrobbler/)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue)](https://pypi.org/project/listenbrainz-scrobbler/)
-[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](#setup)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/LICENSE)
 
 Automatically submit Apple Music listens on macOS to ListenBrainz, including streamed songs outside your library.
 
@@ -17,7 +17,7 @@ lb-scrobbler install --dry-run
 lb-scrobbler status
 ```
 
-If uv reports that its executable directory is missing from `PATH`, run `uv tool update-shell` and restart your shell. For a declaratively managed service, use [Nix / Home Manager](#nix--home-manager).
+For a declaratively managed service, use [Nix / Home Manager](#nix--home-manager).
 
 Play a song and allow the background Python process to control Music when macOS asks. Check `status` for fresh observations and an advancing playback position. If access is denied, enable it in System Settings → Privacy & Security → Automation, then reinstall the agent. A successful foreground probe may still require a separate permission for the background service.
 
@@ -28,9 +28,9 @@ lb-scrobbler auth
 lb-scrobbler install
 ```
 
-For an existing SmashTunes setup, `lb-scrobbler auth --from-smashtunes` explicitly transfers its stored ListenBrainz token into this service's Keychain entry after validating it. Neither command prints the token. Do not put tokens in command arguments, project files, or Git.
+For an existing SmashTunes setup, `lb-scrobbler auth --from-smashtunes` validates its stored ListenBrainz token and copies it into this service's Keychain entry. Neither command prints the token.
 
-`install` starts the service immediately and at future logins. Keep the uv tool installation in place: the service depends on its Python environment. Avoid installing the service through temporary `uvx` environments. Python upgrades may require fresh macOS Automation or Keychain consent.
+`install` starts the service immediately and at future logins. The agent runs the uv tool's Python environment, so keep that installation in place and never run `install` from a temporary `uvx` environment. A Python upgrade may require fresh macOS Automation or Keychain consent.
 
 To upgrade, restart the agent against the updated tool environment:
 
@@ -58,9 +58,7 @@ The current song appears on ListenBrainz as soon as playback is observed. Pausin
 
 A listen is submitted after observing half a track or four minutes of playback, whichever comes first, following [ListenBrainz's submission rule](https://listenbrainz.readthedocs.io/en/latest/users/api/core.html). Pauses, seeks, and observation gaps longer than ten seconds do not contribute listening time. Starting the service halfway through a song does not credit playback it did not observe.
 
-Failed submissions stay queued with their original timestamps. Network and server errors are retried automatically. Inspect other failures with `status`, fix their cause, then run `retry`. After changing the token, restart the agent. For a manual installation, run `lb-scrobbler install`. A crash during submission can occasionally cause a duplicate listen.
-
-Dry runs never submit listens.
+Failed submissions stay queued with their original timestamps. Network and server errors are retried automatically. Inspect other failures with `status`, fix their cause, then run `retry`. After changing the token, run `lb-scrobbler install` to restart a manual installation. A crash during submission can occasionally cause a duplicate listen.
 
 ## Limits
 
@@ -81,4 +79,10 @@ Home Manager replaces the manual installer's LaunchAgent under the same label wh
 
 The LaunchAgent starts at user login after a reboot, when Music and the login Keychain are available. Home Manager owns its lifecycle after migration, so use it for configuration changes instead of the manual `install` and `uninstall` commands. `install` refuses to run from the Nix package, because the interpreter that the manual installer records cannot import the package. `install` and `uninstall` also refuse when the existing agent runs the module's `lb-scrobbler` executable from the Nix store. Agents recorded by a uv, checkout, or older Nix-package install do not match that shape, so they can still be replaced or removed. After changing the token, restart the loaded agent with `launchctl kickstart -k "gui/$(id -u)/xyz.hakula.listenbrainz-scrobbler"`. Disable the module and reactivate Home Manager to remove it. The existing Keychain entry keeps credentials outside the Nix store.
 
-See the [changelog](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/CHANGELOG.md) for release changes. [GitHub releases](https://github.com/hakula139/listenbrainz-scrobbler/releases) also provide wheels, source archives, and checksums.
+## Releases
+
+Releases follow the [versioning policy](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/RELEASING.md#versioning), and the [changelog](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/CHANGELOG.md) lists each release's changes. [GitHub releases](https://github.com/hakula139/listenbrainz-scrobbler/releases) also provide wheels, source archives, and checksums.
+
+## License
+
+Copyright (c) 2026 [Hakula](https://hakula.xyz). Licensed under the [MIT License](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/LICENSE).

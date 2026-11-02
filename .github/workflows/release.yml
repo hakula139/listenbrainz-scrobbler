@@ -103,6 +103,9 @@ jobs:
           parse-changelog CHANGELOG.md "${GITHUB_REF_NAME#v}" > release-notes.md
 
           options=(--verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md)
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            options+=(--prerelease)
+          fi
 
           gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz dist/SHA256SUMS "${options[@]}"
 

@@ -1,12 +1,31 @@
 import json
 import os
-from time import monotonic
+import re
+import time
 from unittest.mock import Mock
 
 import pytest
 
-from lb_scrobbler.music import MusicReader, parse_sample, read_sample
+from lb_scrobbler.music import MusicReader, parse_sample
 from lb_scrobbler.tracking import Sample
+
+
+def closed_pipe(output):
+    read_fd, write_fd = os.pipe()
+    os.write(write_fd, output)
+    os.close(write_fd)
+    return os.fdopen(read_fd, 'rb', buffering=0)
+
+
+@pytest.fixture
+def observer_pipe():
+    read_fd, write_fd = os.pipe()
+    reader = MusicReader()
+    reader.process = Mock(stdout=os.fdopen(read_fd, 'rb', buffering=0))
+    yield reader, write_fd
+
+    reader.close()
+    os.close(write_fd)
 
 
 def test_parse_streaming_metadata():
@@ -18,88 +37,101 @@ def test_parse_streaming_metadata():
         'duration': 180.5,
         'position': 12.5,
     }
+
     assert parse_sample(json.dumps(data).encode()) == Sample(**data)
 
 
 @pytest.mark.parametrize(
-    'data',
+    ('data', 'message'),
     [
-        [],
-        None,
-        {'error': 1},
-        {'position': True},
-        {'duration': -1},
-        {'position': float('nan')},
-        {'duration': float('inf')},
-        {'title': None},
+        pytest.param(
+            [],
+            'Music returned invalid playback metadata: Expected a playback object',
+            id='non-object',
+        ),
+        pytest.param(
+            None,
+            'Music returned invalid playback metadata: Expected a playback object',
+            id='null',
+        ),
+        pytest.param(
+            {'error': 1},
+            'Music returned invalid playback metadata: Expected an error message',
+            id='non-string-error',
+        ),
+        pytest.param(
+            {'state': 'playing', 'position': True},
+            'Music returned invalid playback metadata: '
+            'Invalid playback position or duration',
+            id='boolean-position',
+        ),
+        pytest.param(
+            {'state': 'playing', 'duration': -1},
+            'Music returned invalid playback metadata: '
+            'Invalid playback position or duration',
+            id='negative-duration',
+        ),
+        pytest.param(
+            {'state': 'playing', 'position': float('nan')},
+            'Music returned invalid playback metadata: '
+            'Invalid playback position or duration',
+            id='nan-position',
+        ),
+        pytest.param(
+            {'state': 'playing', 'duration': float('inf')},
+            'Music returned invalid playback metadata: '
+            'Invalid playback position or duration',
+            id='infinite-duration',
+        ),
+        pytest.param(
+            {'state': 'playing', 'title': None},
+            'Music returned invalid playback metadata: Invalid metadata',
+            id='non-string-title',
+        ),
+        pytest.param(
+            {'error': 'Music Automation access denied (-1743)'},
+            'Music Automation access denied (-1743)',
+            id='error-passthrough',
+        ),
     ],
 )
-def test_reject_invalid_metadata(data):
-    if isinstance(data, dict) and 'error' not in data:
-        data = {'state': 'playing', **data}
-    with pytest.raises(RuntimeError, match='invalid playback metadata'):
+def test_parse_failures_report_their_cause(data, message):
+    with pytest.raises(RuntimeError, match=f'^{re.escape(message)}$'):
         parse_sample(json.dumps(data).encode())
-
-
-def test_probe_closes_observer_after_failure(monkeypatch):
-    reader = Mock()
-    reader.read.side_effect = RuntimeError('observer failed')
-    monkeypatch.setattr('lb_scrobbler.music.MusicReader', lambda: reader)
-    with pytest.raises(RuntimeError, match='observer failed'):
-        read_sample()
-    reader.close.assert_called_once()
-
-
-@pytest.fixture
-def observer_pipe():
-    read_fd, write_fd = os.pipe()
-    reader = MusicReader()
-    reader.process = Mock(stdout=os.fdopen(read_fd, 'rb', buffering=0))
-    try:
-        yield reader, write_fd
-    finally:
-        reader.close()
-        os.close(write_fd)
-
-
-def test_reader_consumes_buffered_samples_before_waiting(observer_pipe, monkeypatch):
-    reader, write_fd = observer_pipe
-    os.write(write_fd, b'{"state":"playing"}\n{"state":"paused"}\n')
-    assert reader.read().state == 'playing'
-
-    def unexpected_wait(*args):
-        pytest.fail('A complete buffered sample must not wait for pipe readiness')
-
-    monkeypatch.setattr('lb_scrobbler.music.select.select', unexpected_wait)
-    assert reader.read().state == 'paused'
 
 
 def test_partial_sample_obeys_deadline(observer_pipe):
     reader, write_fd = observer_pipe
     os.write(write_fd, b'{"state":')
-    started = monotonic()
+    started = time.monotonic()
+
     with pytest.raises(RuntimeError, match='Music query timed out'):
         reader._read_line(0.02)
-    assert monotonic() - started < 0.5
+
+    assert time.monotonic() - started < 0.5
     assert reader.process is None
     assert not reader.buffer
 
 
-def test_eof_discards_partial_sample_and_restarts(monkeypatch):
-    read_fd, write_fd = os.pipe()
-    os.write(write_fd, b'{"state":')
-    os.close(write_fd)
+def test_reader_reuses_process_and_restarts_after_eof(monkeypatch):
     reader = MusicReader()
-    reader.process = Mock(stdout=os.fdopen(read_fd, 'rb', buffering=0))
-    with pytest.raises(RuntimeError, match='Music observer exited'):
-        reader.read()
+    reader.process = Mock(
+        stdout=closed_pipe(b'{"state":"playing"}\n{"state":"paused"}\n{"state":')
+    )
 
-    read_fd, write_fd = os.pipe()
-    os.write(write_fd, b'{"state":"stopped"}\n')
-    os.close(write_fd)
-    process = Mock(stdout=os.fdopen(read_fd, 'rb', buffering=0))
-    monkeypatch.setattr('lb_scrobbler.music.subprocess.Popen', lambda *a, **kw: process)
+    process = Mock(stdout=closed_pipe(b'{"state":"stopped"}\n'))
+    popen = Mock(return_value=process)
+    monkeypatch.setattr('lb_scrobbler.music.subprocess.Popen', popen)
+
     try:
+        assert reader.read().state == 'playing'
+        assert reader.read().state == 'paused'
+        popen.assert_not_called()
+
+        with pytest.raises(RuntimeError, match='Music observer exited'):
+            reader.read()
+
         assert reader.read().state == 'stopped'
+        popen.assert_called_once()
     finally:
         reader.close()

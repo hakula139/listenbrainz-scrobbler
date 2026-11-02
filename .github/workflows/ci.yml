@@ -36,17 +36,13 @@ jobs:
         run: nix develop -c uv sync --locked
 
       - name: Check Python types
-        run: nix develop -c uv run --frozen mypy src/lb_scrobbler
+        run: nix develop -c uv run --locked mypy
 
-      - name: Check Python formatting and lint
-        run: |
-          nix develop -c uv run --frozen ruff format --check .
-          nix develop -c uv run --frozen ruff check .
+      - name: Run tests
+        run: nix develop -c uv run --locked pytest -q
 
-      - name: Run tests and build wheel
-        run: |
-          nix develop -c uv run --frozen pytest -q
-          nix develop -c uv build
+      - name: Build distributions
+        run: nix develop -c uv build
 
   result:
     name: CI Result

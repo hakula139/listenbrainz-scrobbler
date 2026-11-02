@@ -2,15 +2,17 @@
 
 from dataclasses import asdict, dataclass, replace
 from importlib.metadata import version
-from typing import Any
+from typing import Any, Self
 from uuid import uuid4
 
 
 SUBMISSION_CLIENT = 'listenbrainz-scrobbler'
 SUBMISSION_CLIENT_VERSION = version(SUBMISSION_CLIENT)
 
-MAX_GAP = 10.0
+SAMPLE_INTERVAL = 2.0
 POSITION_TOLERANCE = 2.0
+MAX_GAP = 10.0
+LISTEN_THRESHOLD_CAP = 240.0
 
 
 @dataclass(frozen=True)
@@ -53,7 +55,7 @@ class Session:
         return asdict(self)
 
     @classmethod
-    def decode(cls, data: dict[str, Any]) -> 'Session':
+    def decode(cls, data: dict[str, Any]) -> Self:
         return cls(**{**data, 'sample': Sample(**data['sample'])})
 
     def is_repeat(self, current: Sample, now: float) -> bool:
@@ -95,10 +97,13 @@ class Tracker:
         self.session = session
 
     def observe(self, current: Sample, now: float) -> dict[str, Any] | None:
+        """Return the payload once per session when playback reaches the threshold.
+
+        Callers must persist that payload together with the checkpoint.
+        """
         if current.state == 'unavailable':
-            if self.session:
+            if self.session is not None:
                 self.session.sample = replace(self.session.sample, state='unavailable')
-                self.session.observed_at = now
             return None
 
         if current.state not in ('playing', 'paused') or not (
@@ -114,10 +119,11 @@ class Tracker:
             return None
 
         previous = self.session
-        same = previous is not None and previous.sample.identity == current.identity
-        repeat = previous is not None and same and previous.is_repeat(current, now)
-
-        if previous is None or not same or repeat:
+        if (
+            previous is None
+            or previous.sample.identity != current.identity
+            or previous.is_repeat(current, now)
+        ):
             self.session = Session(
                 id=uuid4().hex,
                 sample=current,
@@ -127,7 +133,8 @@ class Tracker:
             return None
 
         previous.advance(current, now)
-        if not previous.queued and previous.seconds >= min(current.duration / 2, 240):
+        threshold = min(current.duration / 2, LISTEN_THRESHOLD_CAP)
+        if not previous.queued and previous.seconds >= threshold:
             previous.queued = True
             return previous.payload()
         return None

@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('probe', help='Read current Music playback without submitting')
+
     auth = commands.add_parser(
         'auth', help='Validate and save a token in login Keychain'
     )
@@ -31,16 +32,18 @@ def build_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Read the existing SmashTunes token without displaying it',
     )
-    for name, help_text in (
-        ('run', 'Run in the foreground'),
-        ('install', 'Install and start the launch agent'),
-    ):
-        command = commands.add_parser(name, help=help_text)
-        command.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Observe and queue locally without network submissions',
-        )
+
+    dry_run_option = argparse.ArgumentParser(add_help=False)
+    dry_run_option.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Observe and queue locally without network submissions',
+    )
+    commands.add_parser('run', parents=[dry_run_option], help='Run in the foreground')
+    commands.add_parser(
+        'install', parents=[dry_run_option], help='Install and start the launch agent'
+    )
+
     commands.add_parser('status', help='Show the last observation and queue status')
     commands.add_parser('stop', help='Stop the launch agent for this login session')
     commands.add_parser(
@@ -56,8 +59,10 @@ def authenticate(from_smashtunes: bool) -> None:
             'Library/Containers/nl.smashbits.SmashTunes/Data/Library/'
             'Preferences/nl.smashbits.SmashTunes.plist'
         )
-        with path.open('rb') as source:
-            token = plistlib.load(source).get('ListenBrainzToken', '')
+        try:
+            token = plistlib.loads(path.read_bytes()).get('ListenBrainzToken', '')
+        except FileNotFoundError as error:
+            raise RuntimeError('SmashTunes preferences not found') from error
     else:
         token = getpass.getpass('ListenBrainz token: ')
 
@@ -71,7 +76,7 @@ def authenticate(from_smashtunes: bool) -> None:
 
 
 def print_status() -> None:
-    status_path = service.STATE / 'status.json'
+    status_path = service.STATE / service.STATUS
     status = json.loads(status_path.read_text()) if status_path.exists() else {}
     status['agent_loaded'] = service.loaded()
     if 'updated_at' in status:
@@ -93,14 +98,14 @@ def dispatch(args: argparse.Namespace) -> None:
             print('Launch agent installed. Run status to verify playback access.')
         case 'status':
             print_status()
-        case 'retry':
-            with closing(Store(service.STATE / 'state.sqlite3')) as store:
-                store.retry()
-            print('Retained submissions marked for retry.')
         case 'stop':
             service.stop()
         case 'uninstall':
             service.uninstall()
+        case 'retry':
+            with closing(Store(service.STATE / service.DATABASE)) as store:
+                store.retry()
+            print('Retained submissions marked for retry.')
 
 
 def configure_logging() -> None:

@@ -11,22 +11,24 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import service
-from .client import sender
+from .client import submit_listens
 from .credentials import load_token
 from .music import MusicReader
 from .playback import PlaybackState
 from .store import Store
-from .tracking import Sample
+from .tracking import SAMPLE_INTERVAL, Sample
 
 
 logger = logging.getLogger(__name__)
 
 
 class PlaybackMonitor:
-    def __init__(self, store: Store, reader: MusicReader, state: Path, dry_run: bool):
+    def __init__(
+        self, store: Store, reader: MusicReader, state_dir: Path, dry_run: bool
+    ) -> None:
         self.store = store
         self.reader = reader
-        self.state = state
+        self.state_dir = state_dir
         self.dry_run = dry_run
         self.playback = PlaybackState()
         self.tracker = store.restore()
@@ -55,7 +57,7 @@ class PlaybackMonitor:
         session = self.tracker.session
         self.playback.update(session, time.monotonic())
         self.store.checkpoint(self.tracker, payload)
-        if payload:
+        if payload is not None:
             assert session is not None
             logger.info('Qualified listen %s', session.id)
 
@@ -67,9 +69,10 @@ class PlaybackMonitor:
             'error': error,
             **self.store.status(),
         }
-        pending = self.state / 'status.tmp'
+
+        pending = self.state_dir / 'status.tmp'
         pending.write_text(json.dumps(status, ensure_ascii=False) + '\n')
-        pending.replace(self.state / 'status.json')
+        pending.replace(self.state_dir / service.STATUS)
 
 
 def monitor_playback(path: Path, token: str | None, stop: threading.Event) -> None:
@@ -78,7 +81,9 @@ def monitor_playback(path: Path, token: str | None, stop: threading.Event) -> No
         worker = None
         if token is not None:
             worker = threading.Thread(
-                target=sender, args=(path, token, stop, monitor.playback), daemon=True
+                target=submit_listens,
+                args=(path, token, stop, monitor.playback),
+                daemon=True,
             )
             worker.start()
 
@@ -87,9 +92,9 @@ def monitor_playback(path: Path, token: str | None, stop: threading.Event) -> No
             while not stop.is_set():
                 began = time.monotonic()
                 if worker and not worker.is_alive():
-                    raise RuntimeError('Submission worker exited. Restarting service')
+                    raise RuntimeError('Submission worker exited. Restarting service.')
                 monitor.poll()
-                stop.wait(max(0, 2 - (time.monotonic() - began)))
+                stop.wait(max(0, SAMPLE_INTERVAL - (time.monotonic() - began)))
         finally:
             stop.set()
             if worker:
@@ -106,7 +111,9 @@ def run(dry_run: bool) -> None:
                 'Another scrobbler process is already running'
             ) from error
 
-        path = service.STATE / ('dry-run.sqlite3' if dry_run else 'state.sqlite3')
+        path = service.STATE / (
+            service.DRY_RUN_DATABASE if dry_run else service.DATABASE
+        )
         token = None if dry_run else load_token()
         stop = threading.Event()
         for sig in (signal.SIGINT, signal.SIGTERM):

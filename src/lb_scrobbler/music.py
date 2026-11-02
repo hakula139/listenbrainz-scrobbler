@@ -5,9 +5,9 @@ import math
 import os
 import select
 import subprocess
+import time
 from contextlib import closing
 from pathlib import Path
-from time import monotonic
 
 from .tracking import Sample
 
@@ -33,7 +33,6 @@ class MusicReader:
     def read(self) -> Sample:
         timeout = 10
         if self.process is None:
-            # Reusing OSA avoids repeated, costly macOS input-method initialization.
             self.process = subprocess.Popen(
                 [
                     '/usr/bin/osascript',
@@ -50,9 +49,9 @@ class MusicReader:
 
     def _read_line(self, timeout: float) -> bytes:
         assert self.process is not None and self.process.stdout is not None
-        deadline = monotonic() + timeout
+        deadline = time.monotonic() + timeout
         while b'\n' not in self.buffer:
-            remaining = deadline - monotonic()
+            remaining = deadline - time.monotonic()
             ready, _, _ = select.select(
                 [self.process.stdout], [], [], max(0, remaining)
             )
@@ -61,10 +60,12 @@ class MusicReader:
                 raise RuntimeError(
                     'Music query timed out. Check Automation access and Music.'
                 )
+
             chunk = os.read(self.process.stdout.fileno(), 65536)
             if not chunk:
                 self.close()
                 raise RuntimeError('Music observer exited')
+
             self.buffer.extend(chunk)
 
         end = self.buffer.index(b'\n') + 1
@@ -82,19 +83,24 @@ def parse_sample(line: bytes) -> Sample:
             if not isinstance(data['error'], str):
                 raise ValueError('Expected an error message')
             raise RuntimeError(data['error'])
+
         sample = Sample(**data)
         if not isinstance(sample.state, str) or not all(
             isinstance(value, str) for value in sample.identity
         ):
             raise ValueError('Invalid metadata')
+
         if not all(
             type(value) in (int, float) and math.isfinite(value) and value >= 0
             for value in (sample.duration, sample.position)
         ):
             raise ValueError('Invalid playback position or duration')
+
         return sample
     except (ValueError, TypeError) as error:
-        raise RuntimeError('Music returned invalid playback metadata') from error
+        raise RuntimeError(
+            f'Music returned invalid playback metadata: {error}'
+        ) from error
 
 
 def read_sample() -> Sample:

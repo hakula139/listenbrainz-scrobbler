@@ -1,68 +1,98 @@
-# ==============================================================================
-# ListenBrainz Scrobbler Flake
-# ==============================================================================
+# ==================================================================================================
+# listenbrainz-scrobbler Development Flake
+# ==================================================================================================
 
 {
-  description = "Apple Music scrobbler for ListenBrainz";
+  description = "listenbrainz-scrobbler packages and development environment";
 
-  # ----------------------------------------------------------------------------
+  # ------------------------------------------------------------------------------------------------
   # Inputs
-  # ----------------------------------------------------------------------------
+  # ------------------------------------------------------------------------------------------------
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    flake-utils.url = "github:numtide/flake-utils";
+
     git-hooks-nix = {
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  # ----------------------------------------------------------------------------
+  # ------------------------------------------------------------------------------------------------
   # Outputs
-  # ----------------------------------------------------------------------------
+  # ------------------------------------------------------------------------------------------------
   outputs =
     {
       self,
       nixpkgs,
-      flake-utils,
       git-hooks-nix,
       home-manager,
+      ...
     }:
     let
+      inherit (nixpkgs) lib;
+
+      # git-hooks.nix has dropped x86_64-darwin, which Nixpkgs supports only through 26.05.
+      systems = [
+        "aarch64-darwin"
+        "aarch64-linux"
+        "x86_64-linux"
+      ];
+
+      eachSystem =
+        f:
+        let
+          bySystem = lib.genAttrs systems f;
+          outputs = builtins.attrNames bySystem.${builtins.head systems};
+        in
+        lib.genAttrs outputs (output: builtins.mapAttrs (_: attrs: attrs.${output}) bySystem);
+
+      packageFor =
+        pkgs:
+        self.packages.${pkgs.stdenv.hostPlatform.system}.default
+          or (pkgs.callPackage ./nix/package.nix { });
+
+      # A key lets the module system deduplicate the module when it is imported twice.
       homeModuleKey = "${self}/flake.nix#homeModules.default";
     in
+    # ----------------------------------------------------------------------------------------------
+    # Home Manager Module
+    # ----------------------------------------------------------------------------------------------
     {
       homeModules.default = {
         _class = "homeManager";
         _file = homeModuleKey;
         key = homeModuleKey;
-        imports = [ (import ./nix/home-manager.nix { inherit self; }) ];
+        imports = [ (import ./nix/home-manager.nix { inherit packageFor; }) ];
       };
     }
-    // flake-utils.lib.eachDefaultSystem (
+    // eachSystem (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        inherit (pkgs) lib;
-        python = pkgs.python313.withPackages (p: [
-          p.httpx
-          p.keyring
-          p.mypy
-        ]);
+        inherit (pkgs.stdenv) isDarwin;
+
         package = pkgs.callPackage ./nix/package.nix { };
 
-        # ----------------------------------------------------------------------
-        # Pre-commit hooks
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------------------------------
+        # Pre-commit Hooks
+        # ------------------------------------------------------------------------------------------
         hooks = {
           actionlint.enable = true;
           check-added-large-files.enable = true;
           check-yaml.enable = true;
+          deadnix.enable = true;
+          editorconfig-checker.enable = true;
           end-of-file-fixer.enable = true;
+          nixfmt.enable = true;
+          ruff.enable = true;
+          ruff-format.enable = true;
+          statix.enable = true;
+          taplo.enable = true;
           trim-trailing-whitespace.enable = true;
 
           cspell = {
@@ -72,36 +102,31 @@
               "--no-must-find-files"
             ];
           };
+
           markdownlint = {
             enable = true;
             args = [ "--fix" ];
           };
+
           prettier = {
             enable = true;
-            settings.write = true;
-            files = "\\.(js|json|jsonc|yaml|yml)$";
-          };
-
-          nixfmt.enable = true;
-          statix.enable = true;
-          deadnix.enable = true;
-
-          ruff.enable = true;
-          ruff-format.enable = true;
-          mypy = {
-            enable = true;
-            entry = "${python}/bin/mypy";
-            args = [ "src/lb_scrobbler" ];
-            pass_filenames = false;
+            files = "\\.(js|json|jsonc|ya?ml)$";
           };
         };
 
         preCommit = git-hooks-nix.lib.${system}.run {
           src = ./.;
           hooks = hooks // {
+            mypy = {
+              enable = true;
+              package = pkgs.uv;
+              entry = "${lib.getExe pkgs.uv} run --locked mypy";
+              pass_filenames = false;
+            };
+
             pytest = {
               enable = true;
-              entry = "${lib.getExe pkgs.uv} run --frozen pytest";
+              entry = "${lib.getExe pkgs.uv} run --locked pytest";
               args = [ "-q" ];
               types = [ "python" ];
               pass_filenames = false;
@@ -109,7 +134,7 @@
           };
         };
 
-        # The pytest hook needs the uv environment, which the check sandbox lacks.
+        # The mypy and pytest hooks need the uv environment, which the check sandbox lacks.
         preCommitCheck = git-hooks-nix.lib.${system}.run {
           src = ./.;
           inherit hooks;
@@ -125,36 +150,55 @@
                 homeDirectory = "/Users/scrobbler-test";
                 stateVersion = "26.05";
               };
+
               services.listenbrainz-scrobbler.enable = true;
             }
           ];
         };
       in
       {
-        # ----------------------------------------------------------------------
-        # Package and checks
-        # ----------------------------------------------------------------------
-        packages = lib.optionalAttrs pkgs.stdenv.isDarwin { default = package; };
-        checks = {
-          pre-commit = preCommitCheck;
-        }
-        // lib.optionalAttrs pkgs.stdenv.isDarwin {
-          inherit package;
-          home-manager = moduleCheck.activationPackage;
-        };
-
-        # ----------------------------------------------------------------------
-        # Development shell
-        # ----------------------------------------------------------------------
+        # ------------------------------------------------------------------------------------------
+        # Dev Shell
+        # ------------------------------------------------------------------------------------------
         devShells.default = pkgs.mkShell {
+          name = "listenbrainz-scrobbler-dev";
+
           packages = preCommit.enabledPackages ++ [
             pkgs.git-cliff
             pkgs.python313
             pkgs.uv
           ];
+
+          # The Python hook tools would otherwise put their packages on PYTHONPATH, where they
+          # shadow the uv environment's locked versions.
+          dontAddPythonPath = true;
+
           inherit (preCommit) shellHook;
         };
-        formatter = pkgs.nixfmt;
+
+        # ------------------------------------------------------------------------------------------
+        # Packages
+        # ------------------------------------------------------------------------------------------
+        packages = lib.optionalAttrs isDarwin {
+          default = package;
+          listenbrainz-scrobbler = package;
+        };
+
+        # ------------------------------------------------------------------------------------------
+        # Checks
+        # ------------------------------------------------------------------------------------------
+        checks = {
+          pre-commit = preCommitCheck;
+        }
+        // lib.optionalAttrs isDarwin {
+          inherit package;
+          home-manager = moduleCheck.activationPackage;
+        };
+
+        # ------------------------------------------------------------------------------------------
+        # Formatter
+        # ------------------------------------------------------------------------------------------
+        formatter = pkgs.nixfmt-tree;
       }
     );
 }

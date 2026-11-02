@@ -12,8 +12,16 @@ from .credentials import load_token
 
 
 LABEL = 'xyz.hakula.listenbrainz-scrobbler'
-STATE = Path.home() / 'Library/Application Support/listenbrainz-scrobbler'
 PLIST = Path.home() / 'Library/LaunchAgents' / f'{LABEL}.plist'
+DOMAIN = f'gui/{os.getuid()}'
+TARGET = f'{DOMAIN}/{LABEL}'
+EXIT_TIMEOUT = 80
+
+STATE = Path.home() / 'Library/Application Support/listenbrainz-scrobbler'
+DATABASE = 'state.sqlite3'
+DRY_RUN_DATABASE = 'dry-run.sqlite3'
+STATUS = 'status.json'
+
 NIX_STORE = Path('/nix/store')
 HOME_MANAGER_PROGRAM = 'lb-scrobbler'
 HOME_MANAGER_MODULE = (
@@ -44,23 +52,15 @@ def managed_by_home_manager() -> bool:
     return program.is_relative_to(NIX_STORE) and program.name == HOME_MANAGER_PROGRAM
 
 
-def domain() -> str:
-    return f'gui/{os.getuid()}'
-
-
 def loaded() -> bool:
-    return (
-        subprocess.run(
-            ['launchctl', 'print', f'{domain()}/{LABEL}'], capture_output=True
-        ).returncode
-        == 0
-    )
+    result = subprocess.run(['launchctl', 'print', TARGET], capture_output=True)
+    return result.returncode == 0
 
 
 def stop() -> None:
     if loaded():
-        subprocess.run(['launchctl', 'bootout', f'{domain()}/{LABEL}'], check=True)
-        deadline = time.monotonic() + 90
+        subprocess.run(['launchctl', 'bootout', TARGET], check=True)
+        deadline = time.monotonic() + EXIT_TIMEOUT + 10
         while loaded():
             if time.monotonic() >= deadline:
                 raise RuntimeError('Previous launch agent has not finished stopping')
@@ -73,18 +73,22 @@ def install(dry_run: bool) -> None:
             'Cannot install the launch agent from the Nix package. '
             f'Manage it through the {HOME_MANAGER_MODULE} instead.'
         )
+
     if managed_by_home_manager():
         raise RuntimeError(
             f'The launch agent is owned by the {HOME_MANAGER_MODULE}. '
             'Manage it there instead.'
         )
-    if not dry_run:
-        load_token()
-    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
-    PLIST.parent.mkdir(parents=True, exist_ok=True)
+
     arguments = [sys.executable, '-m', 'lb_scrobbler.cli', 'run']
     if dry_run:
         arguments.append('--dry-run')
+    else:
+        load_token()
+
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    PLIST.parent.mkdir(parents=True, exist_ok=True)
+    log = str(STATE / 'service.log')
     config = {
         'Label': LABEL,
         'ProgramArguments': arguments,
@@ -92,13 +96,14 @@ def install(dry_run: bool) -> None:
         'RunAtLoad': True,
         'KeepAlive': {'SuccessfulExit': False},
         'ThrottleInterval': 30,
-        'ExitTimeOut': 80,
-        'StandardOutPath': str(STATE / 'service.log'),
-        'StandardErrorPath': str(STATE / 'service.log'),
+        'ExitTimeOut': EXIT_TIMEOUT,
+        'StandardOutPath': log,
+        'StandardErrorPath': log,
     }
+
     stop()
     PLIST.write_bytes(plistlib.dumps(config))
-    subprocess.run(['launchctl', 'bootstrap', domain(), str(PLIST)], check=True)
+    subprocess.run(['launchctl', 'bootstrap', DOMAIN, str(PLIST)], check=True)
 
 
 def uninstall() -> None:
