@@ -55,8 +55,8 @@ The draft lists PR titles, which are too short to explain each change to users. 
 3. Inside the dev shell, which provides git-cliff, prepend the section. Because `cliff.toml` bounds sections at stable tags only, a prerelease adds a `--tag-pattern` that bounds its section at every tag:
 
    ```bash
-   git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md                            # Stable
-   git cliff --unreleased --tag vX.Y.Z --tag-pattern '^v[0-9]+\.' --prepend CHANGELOG.md # Prerelease
+   git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md                                # Stable
+   git cliff --unreleased --tag vX.Y.Z --tag-pattern '^v[0-9]+\.' --prepend CHANGELOG.md     # Prerelease
    ```
 
    For a notable release, list the highlights as Markdown bullets in `highlights.md` and add `--with-tag-message="$(<highlights.md)"`, which renders them under `### Highlights` at the top of the section.
