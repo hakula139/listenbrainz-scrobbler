@@ -41,4 +41,6 @@ CI runs hooks and locked Python checks on Linux and macOS. Tests cover playback 
 
 ## Releases
 
-Use the [release skill](.agents/skills/release/SKILL.md) to prepare the changelog and version changes, publish a release, and verify GitHub and PyPI artifacts.
+Squash merges copy the PR title and body into the commit, so write the title for users and put a `BREAKING CHANGE:` footer in the PR body when the change breaks the stability surface, since a footer that lives only in a branch commit is dropped.
+
+Use the [release skill](.agents/skills/release/SKILL.md) to prepare the changelog and version changes, publish a release, and verify GitHub and PyPI artifacts. [RELEASING.md](RELEASING.md) is the source of truth for releases.

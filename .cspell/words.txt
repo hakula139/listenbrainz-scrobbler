@@ -2,6 +2,8 @@ actionlint
 Brainz
 cachix
 direnv
+elif
+esac
 hakula
 httpx
 isort

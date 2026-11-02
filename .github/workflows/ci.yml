@@ -5,10 +5,13 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  workflow_call:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -24,7 +27,7 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@v31
       - name: Check flake, hooks, and macOS package
-        run: nix flake check --print-build-logs
+        run: nix flake check --keep-going --print-build-logs
       - name: Install locked Python dependencies
         run: nix develop -c uv sync --locked
       - name: Check Python types
@@ -37,3 +40,41 @@ jobs:
         run: |
           nix develop -c uv run --frozen pytest -q
           nix develop -c uv build
+
+  result:
+    name: CI Result
+    # A skipped job counts as a passing required check, so the gate must run after failures too.
+    if: ${{ !cancelled() }}
+    needs: [check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    steps:
+      - name: Check results
+        # bash sets pipefail, so a failed API call fails the gate.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GATE_ID: ${{ job.check_run_id }}
+        run: |
+          # `needs` misses a matrix leg cancelled before it starts, so read each job from the API.
+          failed=$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" \
+              --paginate \
+              --slurp |
+              jq -r --argjson gate "$GATE_ID" '
+                [.[].jobs[]] as $jobs
+                | first($jobs[] | select(.id == $gate))
+                  // error("job \($gate) is missing from this run attempt")
+                | $jobs[]
+                | select(.id != $gate)
+                | select(.conclusion != "success" and .conclusion != "skipped")
+                | "::error::\(.name): \(.conclusion // .status)"
+              '
+          )
+
+          if [[ -n "$failed" ]]; then
+            echo "$failed"
+            exit 1
+          fi
