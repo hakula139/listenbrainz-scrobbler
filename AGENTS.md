@@ -41,4 +41,6 @@ CI runs hooks and locked Python checks on Linux and macOS. Tests cover playback 
 
 ## Releases
 
-Use the [release skill](.agents/skills/release/SKILL.md) to prepare the changelog and version changes, publish a release, and verify GitHub and PyPI artifacts.
+The squash commit uses the PR title as its draft changelog entry, so write the title for users and mark a stability-surface break with `!`.
+
+Use absolute GitHub URLs for repository files in README links so they work on PyPI. Follow [RELEASING.md](RELEASING.md) for releases.
