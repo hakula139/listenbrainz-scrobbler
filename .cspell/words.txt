@@ -32,3 +32,4 @@ taiki
 taplo
 tomllib
 venv
+WakaTime
