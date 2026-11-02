@@ -20,6 +20,7 @@ python313Packages.buildPythonApplication {
     fileset = lib.fileset.unions [
       ../pyproject.toml
       ../README.md
+      ../LICENSE
       ../src
       ../tests
     ];
@@ -38,6 +39,7 @@ python313Packages.buildPythonApplication {
   meta = {
     inherit (project) description;
     homepage = project.urls.Repository;
+    license = lib.licenses.mit;
     mainProgram = "lb-scrobbler";
     platforms = lib.platforms.darwin;
   };

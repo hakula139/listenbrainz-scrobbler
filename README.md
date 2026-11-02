@@ -1,9 +1,9 @@
 # listenbrainz-scrobbler
 
-[![CI](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml)
+[![CI](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml/badge.svg)](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/listenbrainz-scrobbler)](https://pypi.org/project/listenbrainz-scrobbler/)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue)](https://pypi.org/project/listenbrainz-scrobbler/)
-[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](#setup)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/LICENSE)
 
 Automatically submit Apple Music listens on macOS to ListenBrainz, including streamed songs outside your library.
 
@@ -82,3 +82,7 @@ The LaunchAgent starts at user login after a reboot, when Music and the login Ke
 ## Releases
 
 Releases follow the [versioning policy](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/RELEASING.md#versioning), and the [changelog](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/CHANGELOG.md) lists each release's changes. [GitHub releases](https://github.com/hakula139/listenbrainz-scrobbler/releases) also provide wheels, source archives, and checksums.
+
+## License
+
+Copyright (c) 2026 [Hakula](https://hakula.xyz). Licensed under the [MIT License](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/LICENSE).
