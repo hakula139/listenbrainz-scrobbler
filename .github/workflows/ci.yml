@@ -36,7 +36,7 @@ jobs:
         run: nix develop -c uv sync --locked
 
       - name: Check Python types
-        run: nix develop -c uv run --locked mypy
+        run: nix develop -c uv run --frozen mypy
 
       - name: Run tests
         run: nix develop -c uv run --frozen pytest -q

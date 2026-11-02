@@ -119,7 +119,7 @@
           hooks = hooks // {
             mypy = {
               enable = true;
-              entry = "${lib.getExe pkgs.uv} run --locked mypy";
+              entry = "${lib.getExe pkgs.uv} run --frozen mypy";
               pass_filenames = false;
             };
 
