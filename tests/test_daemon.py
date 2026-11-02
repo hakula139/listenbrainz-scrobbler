@@ -6,10 +6,19 @@ from unittest.mock import Mock
 
 import pytest
 
-from lb_scrobbler import daemon
-from lb_scrobbler.daemon import PlaybackMonitor, monitor_playback
+from lb_scrobbler.daemon import PlaybackMonitor, monitor_playback, run
 from lb_scrobbler.store import Store
 from lb_scrobbler.tracking import Sample
+
+
+@pytest.fixture
+def run_monitor(monkeypatch, tmp_path):
+    monitor = Mock()
+    monkeypatch.setattr('lb_scrobbler.daemon.service.STATE', tmp_path)
+    monkeypatch.setattr('lb_scrobbler.daemon.monitor_playback', monitor)
+    monkeypatch.setattr('lb_scrobbler.daemon.signal.signal', Mock())
+
+    return monitor
 
 
 def test_monitor_retains_progress_across_read_failure(tmp_path, monkeypatch):
@@ -78,39 +87,30 @@ def test_monitor_queues_qualified_listen(tmp_path, monkeypatch):
     ],
 )
 def test_run_uses_the_matching_database(
-    monkeypatch, tmp_path, dry_run, database, token
+    run_monitor, monkeypatch, tmp_path, dry_run, database, token
 ):
-    monitor = Mock()
     load_token = Mock(return_value='test-token')
-    monkeypatch.setattr('lb_scrobbler.daemon.service.STATE', tmp_path)
-    monkeypatch.setattr('lb_scrobbler.daemon.monitor_playback', monitor)
     monkeypatch.setattr('lb_scrobbler.daemon.load_token', load_token)
-    monkeypatch.setattr('lb_scrobbler.daemon.signal.signal', Mock())
 
-    daemon.run(dry_run=dry_run)
+    run(dry_run=dry_run)
 
-    assert monitor.call_args.args[:2] == (tmp_path / database, token)
+    assert run_monitor.call_args.args[:2] == (tmp_path / database, token)
     if dry_run:
         load_token.assert_not_called()
     else:
         load_token.assert_called_once_with()
 
 
-def test_run_refuses_when_another_process_owns_the_tracker(monkeypatch, tmp_path):
-    monitor = Mock()
-    monkeypatch.setattr('lb_scrobbler.daemon.service.STATE', tmp_path)
-    monkeypatch.setattr('lb_scrobbler.daemon.monitor_playback', monitor)
-    monkeypatch.setattr('lb_scrobbler.daemon.load_token', Mock())
-    monkeypatch.setattr('lb_scrobbler.daemon.signal.signal', Mock())
+def test_run_refuses_when_another_process_owns_the_tracker(run_monitor, tmp_path):
     lock_path = tmp_path / 'run.lock'
 
     with lock_path.open('w') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
         with pytest.raises(RuntimeError, match='already running'):
-            daemon.run(dry_run=True)
+            run(dry_run=True)
 
-    monitor.assert_not_called()
+    run_monitor.assert_not_called()
 
 
 def test_dry_run_observes_without_starting_submission_worker(tmp_path, monkeypatch):

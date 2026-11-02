@@ -10,16 +10,22 @@ from lb_scrobbler.music import MusicReader, parse_sample
 from lb_scrobbler.tracking import Sample
 
 
+def closed_pipe(output):
+    read_fd, write_fd = os.pipe()
+    os.write(write_fd, output)
+    os.close(write_fd)
+    return os.fdopen(read_fd, 'rb', buffering=0)
+
+
 @pytest.fixture
 def observer_pipe():
     read_fd, write_fd = os.pipe()
     reader = MusicReader()
     reader.process = Mock(stdout=os.fdopen(read_fd, 'rb', buffering=0))
-    try:
-        yield reader, write_fd
-    finally:
-        reader.close()
-        os.close(write_fd)
+    yield reader, write_fd
+
+    reader.close()
+    os.close(write_fd)
 
 
 def test_parse_streaming_metadata():
@@ -89,7 +95,7 @@ def test_parse_streaming_metadata():
         ),
     ],
 )
-def test_reject_invalid_metadata(data, message):
+def test_parse_failures_report_their_cause(data, message):
     with pytest.raises(RuntimeError, match=f'^{re.escape(message)}$'):
         parse_sample(json.dumps(data).encode())
 
@@ -108,16 +114,12 @@ def test_partial_sample_obeys_deadline(observer_pipe):
 
 
 def test_reader_reuses_process_and_restarts_after_eof(monkeypatch):
-    read_fd, write_fd = os.pipe()
-    os.write(write_fd, b'{"state":"playing"}\n{"state":"paused"}\n{"state":')
-    os.close(write_fd)
     reader = MusicReader()
-    reader.process = Mock(stdout=os.fdopen(read_fd, 'rb', buffering=0))
+    reader.process = Mock(
+        stdout=closed_pipe(b'{"state":"playing"}\n{"state":"paused"}\n{"state":')
+    )
 
-    restart_read, restart_write = os.pipe()
-    os.write(restart_write, b'{"state":"stopped"}\n')
-    os.close(restart_write)
-    process = Mock(stdout=os.fdopen(restart_read, 'rb', buffering=0))
+    process = Mock(stdout=closed_pipe(b'{"state":"stopped"}\n'))
     popen = Mock(return_value=process)
     monkeypatch.setattr('lb_scrobbler.music.subprocess.Popen', popen)
 

@@ -53,7 +53,9 @@ def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requ
     playing.send(http, 12)
 
     info = requests[1][1]['payload'][0]['track_metadata']['additional_info']
-    assert Version(info.pop('submission_client_version')) == Version(PROJECT_VERSION)
+    sent_version = info.pop('submission_client_version')
+
+    assert Version(sent_version) == Version(PROJECT_VERSION)
 
     assert requests == [
         ('/1/playing-now/delete', {'client': 'listenbrainz-scrobbler'}),

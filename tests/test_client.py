@@ -52,8 +52,10 @@ def test_errors_retain_payload_and_apply_retry_policy(
 
     assert queued.next(2000) is None
     assert queued.status()['blocked'] == int(blocked)
+
     if blocked:
         queued.retry()
+
     assert queued.next(2000 + delay).payload == original
 
 

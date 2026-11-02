@@ -113,7 +113,7 @@ def test_repeat_creates_a_new_listen():
 @pytest.mark.parametrize(
     ('end', 'seek'),
     [(60, 0), (96, 4)],
-    ids=['start', 'near-end'],
+    ids=['from-midtrack', 'from-near-end'],
 )
 def test_backward_seek_does_not_duplicate_qualified_track(end, seek):
     tracker = Tracker()

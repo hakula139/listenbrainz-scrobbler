@@ -33,7 +33,10 @@ python313Packages.buildPythonApplication {
     keyring
   ];
 
-  nativeCheckInputs = [ python313Packages.pytestCheckHook ];
+  nativeCheckInputs = [
+    python313Packages.packaging
+    python313Packages.pytestCheckHook
+  ];
   pythonImportsCheck = [ "lb_scrobbler" ];
 
   meta = {
