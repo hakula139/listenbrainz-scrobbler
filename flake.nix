@@ -119,13 +119,13 @@
           hooks = hooks // {
             mypy = {
               enable = true;
-              entry = "${lib.getExe pkgs.uv} run --frozen mypy";
+              entry = "${lib.getExe pkgs.uv} run --locked mypy";
               pass_filenames = false;
             };
 
             pytest = {
               enable = true;
-              entry = "${lib.getExe pkgs.uv} run --frozen pytest";
+              entry = "${lib.getExe pkgs.uv} run --locked pytest";
               args = [ "-q" ];
               types = [ "python" ];
               pass_filenames = false;
