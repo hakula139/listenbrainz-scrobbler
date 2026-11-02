@@ -32,8 +32,16 @@
       git-hooks-nix,
       home-manager,
     }:
+    let
+      homeModuleKey = "${self}/flake.nix#homeModules.default";
+    in
     {
-      homeManagerModules.default = import ./nix/home-manager.nix { inherit self; };
+      homeModules.default = {
+        _class = "homeManager";
+        _file = homeModuleKey;
+        key = homeModuleKey;
+        imports = [ (import ./nix/home-manager.nix { inherit self; }) ];
+      };
     }
     // flake-utils.lib.eachDefaultSystem (
       system:
@@ -106,7 +114,7 @@
         moduleCheck = home-manager.lib.homeManagerConfiguration {
           inherit pkgs;
           modules = [
-            self.homeManagerModules.default
+            self.homeModules.default
             {
               home = {
                 username = "scrobbler-test";
