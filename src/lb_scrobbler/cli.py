@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import service
 from .client import validate_token
-from .credentials import load_token, save_token
+from .credentials import save_token
 from .daemon import run
 from .music import read_sample
 from .store import Store
@@ -89,8 +89,6 @@ def dispatch(args: argparse.Namespace) -> None:
         case 'run':
             run(args.dry_run)
         case 'install':
-            if not args.dry_run:
-                load_token()
             service.install(args.dry_run)
             print('Launch agent installed. Run status to verify playback access.')
         case 'status':
