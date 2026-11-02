@@ -78,12 +78,6 @@
 
         package = pkgs.callPackage ./nix/package.nix { };
 
-        python = pkgs.python313.withPackages (p: [
-          p.httpx
-          p.keyring
-          p.mypy
-        ]);
-
         # ------------------------------------------------------------------------------------------
         # Pre-commit Hooks
         # ------------------------------------------------------------------------------------------
@@ -114,12 +108,6 @@
             args = [ "--fix" ];
           };
 
-          mypy = {
-            enable = true;
-            entry = "${python}/bin/mypy";
-            pass_filenames = false;
-          };
-
           prettier = {
             enable = true;
             files = "\\.(js|json|jsonc|ya?ml)$";
@@ -129,6 +117,12 @@
         preCommit = git-hooks-nix.lib.${system}.run {
           src = ./.;
           hooks = hooks // {
+            mypy = {
+              enable = true;
+              entry = "${lib.getExe pkgs.uv} run --locked mypy";
+              pass_filenames = false;
+            };
+
             pytest = {
               enable = true;
               entry = "${lib.getExe pkgs.uv} run --frozen pytest";
@@ -139,7 +133,7 @@
           };
         };
 
-        # The pytest hook needs the uv environment, which the check sandbox lacks.
+        # The mypy and pytest hooks need the uv environment, which the check sandbox lacks.
         preCommitCheck = git-hooks-nix.lib.${system}.run {
           src = ./.;
           inherit hooks;

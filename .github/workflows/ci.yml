@@ -35,6 +35,9 @@ jobs:
       - name: Install locked Python dependencies
         run: nix develop -c uv sync --locked
 
+      - name: Check Python types
+        run: nix develop -c uv run --locked mypy
+
       - name: Run tests
         run: nix develop -c uv run --frozen pytest -q
 
