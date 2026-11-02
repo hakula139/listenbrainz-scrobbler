@@ -1,32 +1,43 @@
+# ==================================================================================================
+# listenbrainz-scrobbler
+# ==================================================================================================
+
 {
-  pkgs,
   lib,
+  python313Packages,
 }:
+
 let
-  inherit (builtins.fromTOML (builtins.readFile ../pyproject.toml)) project;
+  inherit (lib.importTOML ../pyproject.toml) project;
 in
-pkgs.python313Packages.buildPythonApplication {
+python313Packages.buildPythonApplication {
   pname = project.name;
   inherit (project) version;
   pyproject = true;
+
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [
       ../pyproject.toml
+      ../README.md
       ../src
       ../tests
-      ../README.md
     ];
   };
-  build-system = [ pkgs.python313Packages.hatchling ];
-  dependencies = with pkgs.python313Packages; [
+
+  build-system = [ python313Packages.hatchling ];
+
+  dependencies = with python313Packages; [
     httpx
     keyring
   ];
-  nativeCheckInputs = [ pkgs.python313Packages.pytestCheckHook ];
+
+  nativeCheckInputs = [ python313Packages.pytestCheckHook ];
   pythonImportsCheck = [ "lb_scrobbler" ];
+
   meta = {
     inherit (project) description;
+    homepage = project.urls.Repository;
     mainProgram = "lb-scrobbler";
     platforms = lib.platforms.darwin;
   };

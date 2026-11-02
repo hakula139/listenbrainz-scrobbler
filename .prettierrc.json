@@ -1,10 +1,7 @@
 {
-  "endOfLine": "lf",
-  "jsxSingleQuote": false,
+  "embeddedLanguageFormatting": "off",
   "printWidth": 100,
   "quoteProps": "consistent",
   "singleQuote": true,
-  "tabWidth": 2,
-  "trailingComma": "all",
-  "useTabs": false
+  "trailingComma": "all"
 }

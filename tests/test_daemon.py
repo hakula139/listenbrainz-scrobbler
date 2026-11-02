@@ -40,14 +40,16 @@ def test_monitor_retains_progress_across_read_failure(tmp_path, monkeypatch):
 
 def test_dry_run_observes_without_starting_submission_worker(tmp_path, monkeypatch):
     reader = Mock()
+    reader.read.return_value = Sample('playing', 'Track', 'Artist', '', 100, 0)
     stop = Mock()
     stop.is_set.side_effect = [False, True]
-    reader.read.return_value = Sample('playing', 'Track', 'Artist', '', 100, 0)
     thread = Mock()
     monkeypatch.setattr('lb_scrobbler.daemon.MusicReader', lambda: reader)
     monkeypatch.setattr('lb_scrobbler.daemon.threading.Thread', thread)
     monkeypatch.setattr('lb_scrobbler.daemon.service.STATE', tmp_path)
+
     monitor_playback(tmp_path / 'dry-run.sqlite3', None, stop)
+
     thread.assert_not_called()
     status = json.loads((tmp_path / 'status.json').read_text())
     assert status['dry_run'] is True

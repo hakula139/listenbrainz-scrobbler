@@ -20,7 +20,8 @@ function snapshot(music) {
     position: music.playerPosition(),
   };
 
-  if (music.currentTrack.name() !== sample.title) {
+  // The track can change between reads, which would mix two tracks' metadata.
+  if (track.name() !== sample.title) {
     return { state: 'unavailable' };
   }
 
@@ -45,6 +46,7 @@ function run() {
 
     const line = $(JSON.stringify(result) + '\n');
     output.writeData(line.dataUsingEncoding($.NSUTF8StringEncoding));
+    // Matches SAMPLE_INTERVAL in tracking.py, which JXA cannot import.
     delay(2);
   }
 }

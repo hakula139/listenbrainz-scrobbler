@@ -3,9 +3,15 @@
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, NamedTuple
 
 from .tracking import Session, Tracker
+
+
+class Pending(NamedTuple):
+    id: str
+    payload: str
+    attempts: int
 
 
 class Store:
@@ -42,6 +48,7 @@ class Store:
                 'INSERT OR REPLACE INTO checkpoint VALUES (1, ?)',
                 (json.dumps(session.encode() if session else None),),
             )
+
             if payload is not None:
                 assert session is not None
                 self.db.execute(
@@ -49,13 +56,13 @@ class Store:
                     (session.id, json.dumps(payload)),
                 )
 
-    def next(self, now: float) -> tuple[str, str, int] | None:
+    def next(self, now: float) -> Pending | None:
         row = self.db.execute(
             'SELECT id, payload, attempts FROM outbox '
             'WHERE blocked = 0 AND retry_at <= ? ORDER BY rowid LIMIT 1',
             (now,),
         ).fetchone()
-        return cast(tuple[str, str, int] | None, row)
+        return Pending(*row) if row else None
 
     def acknowledge(self, key: str) -> None:
         with self.db:
@@ -75,13 +82,17 @@ class Store:
         pending, blocked = self.db.execute(
             'SELECT COUNT(*), COALESCE(SUM(blocked), 0) FROM outbox'
         ).fetchone()
-        errors = self.db.execute(
-            'SELECT DISTINCT error FROM outbox WHERE error IS NOT NULL'
-        ).fetchall()
+
+        errors = [
+            error
+            for (error,) in self.db.execute(
+                'SELECT DISTINCT error FROM outbox WHERE error IS NOT NULL'
+            )
+        ]
         return {
             'pending': pending,
             'blocked': blocked,
-            'errors': [r[0] for r in errors],
+            'errors': errors,
         }
 
     def retry(self) -> None:
