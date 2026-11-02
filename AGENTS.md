@@ -41,6 +41,6 @@ CI runs hooks and locked Python checks on Linux and macOS. Tests cover playback 
 
 ## Releases
 
-Squash merges copy the PR title and body into the commit, so write the title for users and put a `BREAKING CHANGE:` footer in the PR body when the change breaks the stability surface, since a footer that lives only in a branch commit is dropped.
+The squash commit uses the PR title as its draft changelog entry, so write the title for users and mark a stability-surface break with `!`.
 
-Use the [release skill](.agents/skills/release/SKILL.md) to prepare the changelog and version changes, publish a release, and verify GitHub and PyPI artifacts. [RELEASING.md](RELEASING.md) is the source of truth for releases.
+Use absolute GitHub URLs for repository files in README links so they work on PyPI. Follow [RELEASING.md](RELEASING.md) for releases.

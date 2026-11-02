@@ -62,20 +62,15 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    if: ${{ github.ref_type == 'tag' && !inputs.notes }}
+    if: ${{ github.ref_type == 'tag' }}
     needs: tagged-ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
-    env:
-      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
 
       - name: Check the package version
         shell: bash
@@ -87,6 +82,9 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match the package version $version"
             exit 1
           fi
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
 
       - name: Build Python distributions
         run: nix develop -c uv build
@@ -105,16 +103,12 @@ jobs:
           parse-changelog CHANGELOG.md "${GITHUB_REF_NAME#v}" > release-notes.md
 
           options=(--verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md)
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            options+=(--prerelease)
-          fi
 
-          gh release create "$RELEASE_TAG" dist/*.whl dist/*.tar.gz dist/SHA256SUMS "${options[@]}"
+          gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz dist/SHA256SUMS "${options[@]}"
 
   publish-pypi:
-    name: Publish PyPI
+    name: Publish to PyPI
     needs: publish
-    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -123,8 +117,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.1.0
@@ -137,7 +129,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download --repo "$GITHUB_REPOSITORY" --dir dist \
-            --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS -- "$RELEASE_TAG"
+            --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS -- "$GITHUB_REF_NAME"
 
       - name: Verify checksums
         working-directory: dist
