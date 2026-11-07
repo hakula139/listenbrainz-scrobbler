@@ -37,13 +37,6 @@ Watch the [Release workflow](https://github.com/hakula139/listenbrainz-scrobbler
 
 If GitHub publication succeeds but the PyPI job fails, fix its cause and rerun that job, which downloads the already published release files.
 
-## Re-cut an existing tag
+## Recovery restrictions
 
-The PR-based flow tags only reviewed, CI-green commits, so re-cutting should be rare. Re-cut only a run whose PyPI job uploaded nothing, since PyPI refuses reused filenames and the builds are not byte-reproducible. Once PyPI has the version, release a new patch version instead.
-
-Let any in-flight release run finish first. To rebuild the same commit, delete only the release with `gh release delete vX.Y.Z --yes` and run the Release workflow from the Actions tab against the tag with an empty `notes` input. To release a different commit, delete the release and its tag, then move and push the tag:
-
-```bash
-gh release delete vX.Y.Z --cleanup-tag --yes
-git tag -f vX.Y.Z <commit> && git push origin vX.Y.Z
-```
+Follow the shared release procedure for recovery. Rebuilding the same version is allowed only when its PyPI job uploaded nothing, since PyPI refuses reused filenames and the builds are not byte-reproducible. Once PyPI has the version, release a new patch version. Any source change also requires a new version through the release PR process.
