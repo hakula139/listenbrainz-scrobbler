@@ -11,8 +11,8 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
-    git-hooks-nix = {
-      url = "github:cachix/git-hooks.nix";
+    devkit = {
+      url = "github:hakula139/devkit/v1.0.0-rc.3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -29,7 +29,7 @@
     {
       self,
       nixpkgs,
-      git-hooks-nix,
+      devkit,
       home-manager,
       ...
     }:
@@ -43,13 +43,7 @@
         "x86_64-linux"
       ];
 
-      eachSystem =
-        f:
-        let
-          bySystem = lib.genAttrs systems f;
-          outputs = builtins.attrNames bySystem.${builtins.head systems};
-        in
-        lib.genAttrs outputs (output: builtins.mapAttrs (_: attrs: attrs.${output}) bySystem);
+      eachSystem = devkit.lib.eachSystem systems;
 
       packageFor =
         pkgs:
@@ -81,49 +75,19 @@
         # ------------------------------------------------------------------------------------------
         # Pre-commit Hooks
         # ------------------------------------------------------------------------------------------
-        hooks = {
-          actionlint.enable = true;
-          check-added-large-files.enable = true;
-          check-yaml.enable = true;
-          deadnix.enable = true;
-          editorconfig-checker.enable = true;
-          end-of-file-fixer.enable = true;
-          nixfmt.enable = true;
-          ruff.enable = true;
-          ruff-format.enable = true;
-          statix.enable = true;
-          taplo.enable = true;
-          trim-trailing-whitespace.enable = true;
-
-          cspell = {
-            enable = true;
-            args = [
-              "--no-progress"
-              "--no-must-find-files"
-            ];
-          };
-
-          markdownlint = {
-            enable = true;
-            args = [ "--fix" ];
-          };
-
-          prettier = {
-            enable = true;
-            files = "\\.(js|json|jsonc|ya?ml)$";
-          };
-        };
-
-        preCommit = git-hooks-nix.lib.${system}.run {
+        preCommit = (devkit.lib.mkLib pkgs).preCommit {
           src = ./.;
-          hooks = hooks // {
+          hooks = {
+            ruff.enable = true;
+            ruff-format.enable = true;
+          };
+          devHooks = {
             mypy = {
               enable = true;
               package = pkgs.uv;
               entry = "${lib.getExe pkgs.uv} run --locked mypy";
               pass_filenames = false;
             };
-
             pytest = {
               enable = true;
               entry = "${lib.getExe pkgs.uv} run --locked pytest";
@@ -132,12 +96,6 @@
               pass_filenames = false;
             };
           };
-        };
-
-        # The mypy and pytest hooks need the uv environment, which the check sandbox lacks.
-        preCommitCheck = git-hooks-nix.lib.${system}.run {
-          src = ./.;
-          inherit hooks;
         };
 
         moduleCheck = home-manager.lib.homeManagerConfiguration {
@@ -163,17 +121,14 @@
         devShells.default = pkgs.mkShell {
           name = "listenbrainz-scrobbler-dev";
 
-          packages = preCommit.enabledPackages ++ [
+          inputsFrom = [ preCommit.shell ];
+
+          packages = [
             pkgs.git-cliff
             pkgs.python313
             pkgs.uv
           ];
 
-          # The Python hook tools would otherwise put their packages on PYTHONPATH, where they
-          # shadow the uv environment's locked versions.
-          dontAddPythonPath = true;
-
-          inherit (preCommit) shellHook;
         };
 
         # ------------------------------------------------------------------------------------------
@@ -188,7 +143,7 @@
         # Checks
         # ------------------------------------------------------------------------------------------
         checks = {
-          pre-commit = preCommitCheck;
+          pre-commit = preCommit.check;
         }
         // lib.optionalAttrs isDarwin {
           inherit package;
