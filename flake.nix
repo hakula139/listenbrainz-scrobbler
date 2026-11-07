@@ -89,6 +89,8 @@
             prettier.enable = true;
             ruff.enable = true;
             ruff-format.enable = true;
+            shellcheck.enable = true;
+            shfmt.enable = true;
             sort-file-contents.enable = true;
             statix.enable = true;
             taplo.enable = true;
