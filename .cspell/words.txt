@@ -1,5 +1,7 @@
-actionlint
 Brainz
+NSUTF8StringEncoding
+WakaTime
+actionlint
 cachix
 devkit
 direnv
@@ -16,10 +18,10 @@ mypy
 nixfmt
 nixos
 nixpkgs
-NSUTF8StringEncoding
 osascript
 pkgs
 pname
+prek
 pycache
 pypi
 pyproject
@@ -33,4 +35,3 @@ taiki
 taplo
 tomllib
 venv
-WakaTime
