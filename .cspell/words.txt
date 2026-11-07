@@ -28,6 +28,7 @@ pytest
 scrobbler
 scrobblers
 sdist
+shfmt
 statix
 stdenv
 taiki
