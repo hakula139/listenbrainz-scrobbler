@@ -26,7 +26,7 @@ Run `nix develop` once in each new checkout or worktree to generate the pre-comm
 
 ```sh
 uv sync --locked
-pre-commit run --all-files   # Every hook, with mypy and pytest run through uv
+prek run --all-files   # Every hook, with mypy and pytest run through uv
 nix flake check              # The other hooks in the sandbox, plus the package, its tests, and the module on macOS
 uv build
 ```
