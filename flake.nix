@@ -78,8 +78,20 @@
         preCommit = (devkit.lib.mkLib pkgs).preCommit {
           src = ./.;
           hooks = {
+            actionlint.enable = true;
+            check-yaml.enable = true;
+            cspell.enable = true;
+            deadnix.enable = true;
+            dprint.enable = true;
+            editorconfig-checker.enable = true;
+            markdownlint-cli2.enable = true;
+            nixfmt.enable = true;
+            prettier.enable = true;
             ruff.enable = true;
             ruff-format.enable = true;
+            sort-file-contents.enable = true;
+            statix.enable = true;
+            taplo.enable = true;
           };
           devHooks = {
             mypy = {
