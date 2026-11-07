@@ -95,6 +95,7 @@
             statix.enable = true;
             taplo.enable = true;
           };
+
           devHooks = {
             mypy = {
               enable = true;
