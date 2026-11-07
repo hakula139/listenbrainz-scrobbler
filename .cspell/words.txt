@@ -1,6 +1,7 @@
 actionlint
 Brainz
 cachix
+devkit
 direnv
 dont
 editorconfig
