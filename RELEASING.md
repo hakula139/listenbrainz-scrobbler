@@ -20,7 +20,7 @@ Within a minor version, stable releases keep these compatible:
 
 ## Preparation
 
-Follow the [shared release procedure](https://github.com/hakula139/devkit/blob/main/docs/releasing.md) for changelog curation, the release PR, approval, tagging its exact squash commit, and CI recovery. This repository uses `cliff.toml` and `CHANGELOG.md` as the notes source.
+Follow the [shared release procedure](https://github.com/hakula139/devkit/blob/v1/docs/releasing.md) for changelog curation, the release PR, approval, tagging its exact squash commit, and CI recovery. This repository uses `cliff.toml` and `CHANGELOG.md` as the notes source.
 
 Set `version` in `pyproject.toml` to the tag without its `v`, then run `uv lock` and keep the project version change. For a stable release, also update the versioned Nix example in `README.md`. Run the [verification block](AGENTS.md#verification). The release diff normally touches `pyproject.toml`, `uv.lock`, `README.md`, `CHANGELOG.md`, and possibly `.cspell/words.txt`.
 
