@@ -56,6 +56,7 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        dk = devkit.lib.mkLib pkgs;
         inherit (pkgs.stdenv) isDarwin;
 
         package = packageFor pkgs;
@@ -63,7 +64,7 @@
         # ------------------------------------------------------------------------------------------
         # Pre-commit Hooks
         # ------------------------------------------------------------------------------------------
-        preCommit = (devkit.lib.mkLib pkgs).preCommit {
+        preCommit = dk.preCommit {
           src = ./.;
           hooks = {
             actionlint.enable = true;
@@ -87,8 +88,7 @@
           devHooks = {
             mypy = {
               enable = true;
-              package = pkgs.uv;
-              entry = "${lib.getExe pkgs.uv} run --locked mypy";
+              package = dk.uvTool "mypy";
               pass_filenames = false;
             };
             pytest = {

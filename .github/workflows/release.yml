@@ -47,7 +47,6 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Check the package version
-        id: version
         shell: bash
         run: |
           version=$(
@@ -57,7 +56,6 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match the package version $version"
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Setup Nix
         uses: hakula139/devkit/.github/actions/setup-nix@v1
@@ -73,8 +71,8 @@ jobs:
         uses: hakula139/devkit/.github/actions/publish-release@v1
         with:
           assets: |
-            dist/listenbrainz_scrobbler-${{ steps.version.outputs.version }}-py3-none-any.whl
-            dist/listenbrainz_scrobbler-${{ steps.version.outputs.version }}.tar.gz
+            dist/*.whl
+            dist/*.tar.gz
             dist/SHA256SUMS
 
   publish-pypi:
