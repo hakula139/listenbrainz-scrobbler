@@ -30,7 +30,11 @@ jobs:
         uses: hakula139/devkit/.github/actions/setup-nix@v1
 
       - name: Check flake, hooks, and macOS package
-        run: nix flake check --keep-going --print-build-logs
+        run: |
+          nix flake check \
+            --keep-going \
+            --print-build-logs \
+            ${{ runner.os == 'Linux' && '--all-systems' || '' }}
 
       - name: Install locked Python dependencies
         run: nix develop -c uv sync --locked

@@ -36,19 +36,7 @@
     let
       inherit (nixpkgs) lib;
 
-      # git-hooks.nix has dropped x86_64-darwin, which Nixpkgs supports only through 26.05.
-      systems = [
-        "aarch64-darwin"
-        "aarch64-linux"
-        "x86_64-linux"
-      ];
-
-      eachSystem = devkit.lib.eachSystem systems;
-
-      packageFor =
-        pkgs:
-        self.packages.${pkgs.stdenv.hostPlatform.system}.default
-          or (pkgs.callPackage ./nix/package.nix { });
+      packageFor = pkgs: pkgs.callPackage ./nix/package.nix { };
 
       # A key lets the module system deduplicate the module when it is imported twice.
       homeModuleKey = "${self}/flake.nix#homeModules.default";
@@ -64,13 +52,13 @@
         imports = [ (import ./nix/home-manager.nix { inherit packageFor; }) ];
       };
     }
-    // eachSystem (
+    // devkit.lib.eachSystem devkit.lib.systems (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         inherit (pkgs.stdenv) isDarwin;
 
-        package = pkgs.callPackage ./nix/package.nix { };
+        package = packageFor pkgs;
 
         # ------------------------------------------------------------------------------------------
         # Pre-commit Hooks

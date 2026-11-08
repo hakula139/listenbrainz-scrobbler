@@ -20,11 +20,11 @@ Within a minor version, stable releases keep these compatible:
 
 ## Preparation
 
-Follow the [shared release procedure](https://github.com/hakula139/devkit/blob/v1/docs/releasing.md) for changelog curation, the release PR, approval, tagging its exact squash commit, and CI recovery. This repository uses `cliff.toml` and `CHANGELOG.md` as the notes source.
+Follow the [release skill](https://github.com/hakula139/plugins/blob/main/plugins/hakula-workflow/skills/release/SKILL.md) for changelog curation, the release PR, approval, tagging its exact squash commit, and CI recovery. Use devkit's shared git-cliff configuration.
 
 Set `version` in `pyproject.toml` to the tag without its `v`, then run `uv lock` and keep the project version change. For a stable release, also update the versioned Nix example in `README.md`. Run the [verification block](AGENTS.md#verification). The release diff normally touches `pyproject.toml`, `uv.lock`, `README.md`, `CHANGELOG.md`, and possibly `.cspell/words.txt`.
 
-The changelog uses compare reference links. Stable sections compare against the previous stable tag, and prereleases against the previous tag. The Release workflow's `notes` input republishes a corrected changelog section without rebuilding artifacts.
+The Release workflow's `notes` input republishes a corrected changelog section without rebuilding artifacts.
 
 ## Verify publication
 
@@ -39,4 +39,4 @@ If GitHub publication succeeds but the PyPI job fails, fix its cause and rerun t
 
 ## Recovery restrictions
 
-Follow the shared release procedure for recovery. Rebuilding the same version is allowed only when its PyPI job uploaded nothing, since PyPI refuses reused filenames and the builds are not byte-reproducible. Once PyPI has the version, release a new patch version. Any source change also requires a new version through the release PR process.
+Rebuilding the same version is allowed only when its PyPI job uploaded nothing, since PyPI refuses reused filenames and the builds are not byte-reproducible. Once PyPI has the version, release a new patch version. Any source change also requires a new version through the release PR process.
