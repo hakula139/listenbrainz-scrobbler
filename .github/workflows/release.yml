@@ -26,39 +26,13 @@ jobs:
     timeout-minutes: 60
     permissions:
       actions: read
+      contents: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Wait for CI on the tagged commit
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Pull request runs test a merge commit, so only push and dispatched runs count.
-          while true; do
-            verdict=$(
-              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100" \
-                --paginate \
-                --slurp |
-                jq -r '[.[].workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")]
-                  | if any(.[]; .conclusion == "success") then
-                      "passed \(map(select(.conclusion == "success"))[0].html_url)"
-                    elif any(.[]; .status != "completed") then "running"
-                    else "failed" end'
-            )
-            case "$verdict" in
-              passed*)
-                echo "CI passed on $GITHUB_SHA: ${verdict#passed }"
-                exit 0
-                ;;
-              running)
-                sleep 30
-                ;;
-              *)
-                echo "::error::No push or dispatched CI run passed on $GITHUB_SHA." \
-                  "Rerun its failed jobs, or run ci.yml on $GITHUB_REF_NAME, then rerun this job."
-                exit 1
-                ;;
-            esac
-          done
+        uses: hakula139/devkit/.github/actions/tagged-ci@v2
 
   publish:
     name: Publish GitHub Release
@@ -83,8 +57,8 @@ jobs:
             exit 1
           fi
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
+      - name: Setup Nix
+        uses: hakula139/devkit/.github/actions/setup-nix@v2
 
       - name: Build Python distributions
         run: nix develop -c uv build
@@ -93,21 +67,13 @@ jobs:
         working-directory: dist
         run: sha256sum -- *.whl *.tar.gz > SHA256SUMS
 
-      - name: Install changelog parser
-        uses: taiki-e/install-action@parse-changelog
-
       - name: Publish release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          parse-changelog CHANGELOG.md "${GITHUB_REF_NAME#v}" > release-notes.md
-
-          options=(--verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md)
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            options+=(--prerelease)
-          fi
-
-          gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz dist/SHA256SUMS "${options[@]}"
+        uses: hakula139/devkit/.github/actions/publish-release@v2
+        with:
+          assets: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
 
   publish-pypi:
     name: Publish to PyPI
@@ -131,8 +97,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download --repo "$GITHUB_REPOSITORY" --dir dist \
-            --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS -- "$GITHUB_REF_NAME"
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir dist \
+            --pattern '*.whl' \
+            --pattern '*.tar.gz' \
+            --pattern SHA256SUMS
 
       - name: Verify checksums
         working-directory: dist

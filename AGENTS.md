@@ -24,10 +24,12 @@ Only one process may own the tracker, including dry runs. Use `probe` for observ
 
 Run `nix develop` once in each new checkout or worktree to generate the pre-commit configuration and install its hooks.
 
+`prek` includes the development-only mypy and pytest hooks. On macOS, `nix flake check` also builds the package and Home Manager generation.
+
 ```sh
 uv sync --locked
-pre-commit run --all-files   # Every hook, with mypy and pytest run through uv
-nix flake check              # The other hooks in the sandbox, plus the package, its tests, and the module on macOS
+prek run --all-files
+nix flake check
 uv build
 ```
 

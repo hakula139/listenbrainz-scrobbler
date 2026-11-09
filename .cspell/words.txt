@@ -1,6 +1,7 @@
 actionlint
 Brainz
 cachix
+devkit
 direnv
 dont
 editorconfig
@@ -19,6 +20,7 @@ NSUTF8StringEncoding
 osascript
 pkgs
 pname
+prek
 pycache
 pypi
 pyproject
@@ -26,6 +28,7 @@ pytest
 scrobbler
 scrobblers
 sdist
+shfmt
 statix
 stdenv
 taiki
