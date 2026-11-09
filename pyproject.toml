@@ -23,14 +23,7 @@ build-backend = "hatchling.build"
 packages = ["src/lb_scrobbler"]
 
 [tool.hatch.build.targets.sdist]
-only-include = [
-  "src",
-  "tests",
-  "pyproject.toml",
-  "README.md",
-  "CHANGELOG.md",
-  "LICENSE",
-]
+only-include = ["src", "tests", "pyproject.toml", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [dependency-groups]
 dev = ["mypy>=2.4.1", "packaging>=26.3", "pytest>=9.1.1"]
