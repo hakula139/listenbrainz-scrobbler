@@ -17,7 +17,7 @@ mypy
 nixfmt
 nixos
 nixpkgs
-NSUTF8StringEncoding
+NSUTF
 osascript
 pkgs
 pname
@@ -32,7 +32,7 @@ sdist
 shellcheck
 shfmt
 smashbits
-SmashTunes
+smashtunes
 statix
 stdenv
 taiki
@@ -41,5 +41,5 @@ testpaths
 tomllib
 transpiling
 venv
-WakaTime
+Waka
 worktrees
