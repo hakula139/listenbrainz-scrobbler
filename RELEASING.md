@@ -32,7 +32,7 @@ uvx --refresh --python 3.13 --from listenbrainz-scrobbler==X.Y.Z lb-scrobbler --
 
 ## Recovery
 
-If the GitHub Release publishes but the PyPI job fails, fix the cause and rerun that job, which downloads the published release files. Rebuild a version only when its PyPI job uploaded nothing, since PyPI refuses reused filenames and the builds are not byte-reproducible. Once PyPI has the version, release a new patch version.
+Once the GitHub Release publishes, its files are fixed, so a failed PyPI job is recovered only by fixing the cause and rerunning that job, and any other failure needs a new patch version.
 
 To republish a corrected changelog section without rebuilding the artifacts, run the Release workflow from `main` with the tag:
 
