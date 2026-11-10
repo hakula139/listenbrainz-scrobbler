@@ -22,15 +22,13 @@ Only one process may own the tracker, including dry runs. Use `probe` for observ
 
 ## Verification
 
-Run `nix develop` once in each new checkout or worktree to generate the pre-commit configuration and install its hooks.
-
-`prek` includes the development-only mypy and pytest hooks. On macOS, `nix flake check` also builds the package and Home Manager generation.
+On macOS, `nix flake check` also builds the package and Home Manager generation.
 
 ```sh
-uv sync --locked
-prek run --all-files
+nix develop -c run-hooks
 nix flake check
-uv build
+nix develop -c uv run --locked pytest -q
+nix develop -c uv build
 ```
 
 `uv run lb-scrobbler install` records the checkout's `.venv` Python in the agent, so rerun `install` after recreating or moving that environment.
