@@ -22,11 +22,9 @@ Only one process may own the tracker, including dry runs. Use `probe` for observ
 
 ## Verification
 
-On macOS, `nix flake check` also builds the package and Home Manager generation.
-
 ```sh
 nix develop -c run-hooks
-nix flake check
+nix flake check --all-systems
 nix develop -c uv run --locked pytest -q
 nix develop -c uv build
 ```

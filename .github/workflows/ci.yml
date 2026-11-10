@@ -34,11 +34,8 @@ jobs:
       - name: Set up Nix
         uses: hakula139/devkit/.github/actions/setup-nix@v3
 
-      - name: Install dependencies
-        run: nix develop -c uv sync --locked
-
       - name: Test
-        run: nix develop -c uv run --no-sync pytest -q
+        run: nix develop -c uv run --locked pytest -q
 
       - name: Build distributions
         run: nix develop -c uv build
