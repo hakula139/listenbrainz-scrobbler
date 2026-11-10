@@ -16,11 +16,10 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   tagged-ci:
-    name: Check Tagged Commit CI
+    name: Check Release
     if: ${{ github.ref_type == 'tag' && !inputs.notes }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -31,12 +30,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Check the package version
+        run: |
+          version=$(
+            python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
+          )
+          if [[ "v$version" != "$GITHUB_REF_NAME" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the package version $version"
+            exit 1
+          fi
+
       - name: Wait for CI on the tagged commit
         uses: hakula139/devkit/.github/actions/tagged-ci@v3
 
   publish:
     name: Publish GitHub Release
-    if: ${{ github.ref_type == 'tag' }}
     needs: tagged-ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -46,18 +54,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Check the package version
-        shell: bash
-        run: |
-          version=$(
-            python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
-          )
-          if [[ "$version" != "${GITHUB_REF_NAME#v}" ]]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match the package version $version"
-            exit 1
-          fi
-
-      - name: Setup Nix
+      - name: Set up Nix
         uses: hakula139/devkit/.github/actions/setup-nix@v3
 
       - name: Build Python distributions
