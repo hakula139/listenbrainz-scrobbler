@@ -17,7 +17,7 @@ mypy
 nixfmt
 nixos
 nixpkgs
-NSUTF8StringEncoding
+NSUTF
 osascript
 pkgs
 pname
