@@ -113,7 +113,6 @@
           inputsFrom = [ preCommit ];
 
           packages = [
-            pkgs.git-cliff
             pkgs.python313
             pkgs.uv
           ];

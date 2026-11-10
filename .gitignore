@@ -20,8 +20,7 @@ result-*
 .env
 
 # Assistant local state
-.agents/plans/
-.claude/agent-memory-local
-.claude/plans
+**/.agents/plans/
+**/.claude/agent-memory-local/
 **/.claude/settings.local.json
-.claude/worktrees/
+/.claude/worktrees/
