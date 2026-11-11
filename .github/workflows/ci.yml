@@ -20,22 +20,27 @@ jobs:
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
   python:
-    name: Python (${{ matrix.os }})
-    runs-on: ${{ matrix.os == 'macOS' && 'macos-latest' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: hakula139/devkit/.github/workflows/python.yml@v3
+    with:
+      coverage: false
+      macos: true
+    secrets:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [Linux, macOS]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Set up Nix
         uses: hakula139/devkit/.github/actions/setup-nix@v3
-
-      - name: Test
-        run: nix develop -c uv run --locked pytest -q
 
       - name: Build distributions
         run: nix develop -c uv build
@@ -44,11 +49,12 @@ jobs:
     name: CI Result
     # A skipped required check passes, so the gate must run after failures too.
     if: ${{ !cancelled() }}
-    needs: [nix, python]
+    needs: [nix, python, build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: read
+
     steps:
       - name: Check results
         uses: hakula139/devkit/.github/actions/ci-result@v3

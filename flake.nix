@@ -67,22 +67,12 @@
         preCommit = dk.preCommit {
           src = ./.;
           hooks = {
-            actionlint.enable = true;
-            check-yaml.enable = true;
-            cspell.enable = true;
-            deadnix.enable = true;
-            dprint.enable = true;
-            editorconfig-checker.enable = true;
-            markdownlint-cli2.enable = true;
             mypy.enable = true;
-            nixfmt.enable = true;
             prettier.enable = true;
             ruff.enable = true;
             ruff-format.enable = true;
             shellcheck.enable = true;
             shfmt.enable = true;
-            sort-file-contents.enable = true;
-            statix.enable = true;
             taplo.enable = true;
           };
         };
@@ -112,12 +102,7 @@
 
           inputsFrom = [ preCommit ];
 
-          packages = [
-            pkgs.python313
-            pkgs.uv
-          ];
-
-          UV_PYTHON_DOWNLOADS = "never";
+          packages = [ pkgs.python313 ] ++ builtins.attrValues dk.uvToolchain;
         };
 
         # ------------------------------------------------------------------------------------------

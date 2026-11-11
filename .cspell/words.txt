@@ -2,7 +2,6 @@ autouse
 bootout
 cachix
 cooldown
-deadnix
 devkit
 direnv
 executescript
@@ -33,7 +32,6 @@ shellcheck
 shfmt
 smashbits
 smashtunes
-statix
 stdenv
 taiki
 taplo
