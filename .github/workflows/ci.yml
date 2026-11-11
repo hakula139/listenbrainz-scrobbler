@@ -25,7 +25,6 @@ jobs:
       id-token: write
     uses: hakula139/devkit/.github/workflows/python.yml@v3
     with:
-      coverage: false
       macos: true
     secrets:
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}

@@ -26,7 +26,7 @@ packages = ["src/lb_scrobbler"]
 only-include = ["src", "tests", "pyproject.toml", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [dependency-groups]
-dev = ["mypy>=2.4.1", "packaging>=26.3", "pytest>=9.2.0"]
+dev = ["mypy>=2.4.1", "packaging>=26.3", "pytest>=9.2.0", "pytest-cov>=7.1.0"]
 
 [tool.uv]
 required-version = ">=0.13"
@@ -48,8 +48,14 @@ ignore = ["S101", "S603", "S607"]
 lines-after-imports = 2
 combine-as-imports = true
 
-[tool.pytest.ini_options]
+[tool.pytest]
+minversion = "9.0"
+addopts = ["--quiet", "--cov", "--cov-report=term", "--cov-report=xml"]
+strict = true
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src"]
 
 [tool.mypy]
 strict = true

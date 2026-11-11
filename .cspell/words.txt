@@ -1,3 +1,4 @@
+addopts
 autouse
 bootout
 cachix
@@ -12,6 +13,7 @@ httpx
 isort
 listenbrainz
 midtrack
+minversion
 mypy
 nixfmt
 nixos

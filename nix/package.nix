@@ -35,6 +35,7 @@ python313Packages.buildPythonApplication {
 
   nativeCheckInputs = [
     python313Packages.packaging
+    python313Packages.pytest-cov-stub
     python313Packages.pytestCheckHook
   ];
   pythonImportsCheck = [ "lb_scrobbler" ];

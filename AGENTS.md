@@ -25,7 +25,7 @@ Only one process may own the tracker, including dry runs. Use `probe` for observ
 ```sh
 nix develop -c run-hooks
 nix flake check --all-systems
-nix develop -c uv run --locked pytest -q
+nix develop -c uv run --locked pytest
 nix develop -c uv build
 ```
 

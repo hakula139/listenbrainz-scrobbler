@@ -1,6 +1,7 @@
 # listenbrainz-scrobbler
 
 [![CI](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml/badge.svg)](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/hakula139/listenbrainz-scrobbler/graph/badge.svg)](https://codecov.io/gh/hakula139/listenbrainz-scrobbler)
 [![PyPI](https://img.shields.io/pypi/v/listenbrainz-scrobbler)](https://pypi.org/project/listenbrainz-scrobbler/)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue)](https://pypi.org/project/listenbrainz-scrobbler/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/hakula139/listenbrainz-scrobbler/blob/main/LICENSE)
