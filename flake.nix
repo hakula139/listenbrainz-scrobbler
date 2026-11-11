@@ -12,7 +12,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     devkit = {
-      url = "github:hakula139/devkit/v2";
+      url = "github:hakula139/devkit/v3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -67,37 +67,13 @@
         preCommit = dk.preCommit {
           src = ./.;
           hooks = {
-            actionlint.enable = true;
-            check-yaml.enable = true;
-            cspell.enable = true;
-            deadnix.enable = true;
-            dprint.enable = true;
-            editorconfig-checker.enable = true;
-            markdownlint-cli2.enable = true;
-            nixfmt.enable = true;
+            mypy.enable = true;
             prettier.enable = true;
             ruff.enable = true;
             ruff-format.enable = true;
             shellcheck.enable = true;
             shfmt.enable = true;
-            sort-file-contents.enable = true;
-            statix.enable = true;
             taplo.enable = true;
-          };
-
-          devHooks = {
-            mypy = {
-              enable = true;
-              package = dk.uvTool "mypy";
-              pass_filenames = false;
-            };
-            pytest = {
-              enable = true;
-              entry = "${lib.getExe pkgs.uv} run --locked pytest";
-              args = [ "-q" ];
-              types = [ "python" ];
-              pass_filenames = false;
-            };
           };
         };
 
@@ -124,14 +100,9 @@
         devShells.default = pkgs.mkShell {
           name = "listenbrainz-scrobbler-dev";
 
-          inputsFrom = [ preCommit.shell ];
+          inputsFrom = [ preCommit ];
 
-          packages = [
-            pkgs.git-cliff
-            pkgs.python313
-            pkgs.uv
-          ];
-
+          packages = [ pkgs.python313 ] ++ builtins.attrValues dk.uvToolchain;
         };
 
         # ------------------------------------------------------------------------------------------
@@ -145,10 +116,7 @@
         # ------------------------------------------------------------------------------------------
         # Checks
         # ------------------------------------------------------------------------------------------
-        checks = {
-          pre-commit = preCommit.check;
-        }
-        // lib.optionalAttrs isDarwin {
+        checks = lib.optionalAttrs isDarwin {
           inherit package;
           home-manager = moduleCheck.activationPackage;
         };

@@ -14,49 +14,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Check (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  nix:
+    uses: hakula139/devkit/.github/workflows/nix.yml@v3
+    secrets:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+  python:
+    permissions:
+      contents: read
+      id-token: write
+    uses: hakula139/devkit/.github/workflows/python.yml@v3
+    with:
+      coverage: false
+      macos: true
+    secrets:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install Nix
-        uses: hakula139/devkit/.github/actions/setup-nix@v2
-
-      - name: Check flake, hooks, and macOS package
-        run: |
-          nix flake check \
-            --keep-going \
-            --print-build-logs \
-            ${{ runner.os == 'Linux' && '--all-systems' || '' }}
-
-      - name: Install locked Python dependencies
-        run: nix develop -c uv sync --locked
-
-      - name: Check Python types
-        run: nix develop -c uv run --locked mypy
-
-      - name: Run tests
-        run: nix develop -c uv run --locked pytest -q
+      - name: Set up Nix
+        uses: hakula139/devkit/.github/actions/setup-nix@v3
 
       - name: Build distributions
         run: nix develop -c uv build
 
   result:
     name: CI Result
-    # A skipped job counts as a passing required check, so the gate must run after failures too.
+    # A skipped required check passes, so the gate must run after failures too.
     if: ${{ !cancelled() }}
-    needs: [check]
+    needs: [nix, python, build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: read
+
     steps:
       - name: Check results
-        uses: hakula139/devkit/.github/actions/ci-result@v2
+        uses: hakula139/devkit/.github/actions/ci-result@v3

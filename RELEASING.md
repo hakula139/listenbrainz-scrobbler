@@ -1,12 +1,12 @@
 # Releasing
 
-Pushing a tag that matches `v[0-9]+.*` starts `.github/workflows/release.yml`, which waits for a passing CI run on the tagged commit, builds the wheel and source archive, and publishes a GitHub Release with the tag's `CHANGELOG.md` section as its notes. The same verified files are then uploaded to PyPI through Trusted Publishing.
+Pushing a version tag runs the [Release workflow](.github/workflows/release.yml). It waits for CI on the tagged commit, publishes the tag's `CHANGELOG.md` section as a GitHub Release with the wheel, source archive, and `SHA256SUMS`, then uploads the same files to PyPI through Trusted Publishing. The [release skill](https://github.com/hakula139/plugins/blob/main/plugins/hakula-workflow/skills/release/SKILL.md) covers the shared procedure.
 
 ## Versioning
 
 - **Before 1.0**: tag `v0.N.0` whenever a user-visible batch lands, and `v0.N.M` for a fix to shipped behavior. A change to the stability surface bumps the minor version and is listed under Breaking changes.
 - **After 1.0**: a breaking change to the [stability surface](#stability-surface) bumps the major version, a user-visible addition or change bumps the minor version, and a fix bumps the patch version.
-- **Prereleases**: a tag with a suffix such as `-rc.1` publishes a prerelease, and its section lists only changes since the previous tag. PyPI treats the matching version as a prerelease, so `uv tool install` skips it unless pinned.
+- **Prereleases**: a tag with a `-` suffix publishes a prerelease. PyPI treats its version as a prerelease too, so `uv tool install` skips it unless pinned.
 
 ### Stability surface
 
@@ -20,23 +20,22 @@ Within a minor version, stable releases keep these compatible:
 
 ## Preparation
 
-Follow the [release skill](https://github.com/hakula139/plugins/blob/main/plugins/hakula-workflow/skills/release/SKILL.md) for changelog curation, the release PR, approval, tagging its exact squash commit, and CI recovery. Use devkit's shared git-cliff configuration.
-
-Set `version` in `pyproject.toml` to the tag without its `v`, then run `uv lock` and keep the project version change. For a stable release, also update the versioned Nix example in `README.md`. Run the [verification block](AGENTS.md#verification). The release diff normally touches `pyproject.toml`, `uv.lock`, `README.md`, `CHANGELOG.md`, and possibly `.cspell/words.txt`.
-
-The Release workflow's `notes` input republishes a corrected changelog section without rebuilding artifacts.
+Set `version` in `pyproject.toml` to the tag without its `v` and run `uv lock`. For a stable release, also update the versioned flake input in `README.md`. Then run the [verification commands](AGENTS.md#verification).
 
 ## Verify publication
 
-Watch the [Release workflow](https://github.com/hakula139/listenbrainz-scrobbler/actions/workflows/release.yml) with `gh run watch` and check:
+Check that PyPI's project description renders the README, then run the published version in a temporary environment, which leaves the installed tool and agent untouched:
 
-- The release notes match the changelog section, and a prerelease tag published a prerelease.
-- The release attaches the wheel, the source archive, and `SHA256SUMS`, and `sha256sum --check SHA256SUMS` passes on a download.
-- PyPI's version-specific JSON response lists the same distribution hashes, and its description matches the README.
-- An isolated `uvx --refresh --python 3.13 --from listenbrainz-scrobbler==X.Y.Z lb-scrobbler --help` succeeds. It runs in a temporary environment, so the user's installed tool and agent stay untouched.
+```sh
+uvx --refresh --python 3.13 --from listenbrainz-scrobbler==X.Y.Z lb-scrobbler --help
+```
 
-If GitHub publication succeeds but the PyPI job fails, fix its cause and rerun that job, which downloads the already published release files.
+## Recovery
 
-## Recovery restrictions
+Once the GitHub Release publishes, its files are fixed, so a failed PyPI job is recovered only by fixing the cause and rerunning that job, and any other failure needs a new patch version.
 
-Rebuilding the same version is allowed only when its PyPI job uploaded nothing, since PyPI refuses reused filenames and the builds are not byte-reproducible. Once PyPI has the version, release a new patch version. Any source change also requires a new version through the release PR process.
+To republish a corrected changelog section without rebuilding the artifacts, run the Release workflow from `main` with the tag:
+
+```sh
+gh workflow run release.yml -f notes=vX.Y.Z
+```

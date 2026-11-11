@@ -9,19 +9,14 @@ __pycache__/
 # Nix
 .direnv/
 /.pre-commit-config.yaml
-# `nix build` creates output links wherever it runs. Keep real source directories visible.
-result
-result-*
-!result/
-!result-*/
+/result
+/result-*
 
 # Local environment
 .DS_Store
 .env
 
 # Assistant local state
-.agents/plans/
-.claude/agent-memory-local
-.claude/plans
+**/.agents/plans/
+**/.claude/agent-memory-local/
 **/.claude/settings.local.json
-.claude/worktrees/
