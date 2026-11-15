@@ -58,8 +58,11 @@ class Store:
 
     def next(self, now: float) -> Pending | None:
         row = self.db.execute(
-            'SELECT id, payload, attempts FROM outbox '
-            'WHERE blocked = 0 AND retry_at <= ? ORDER BY rowid LIMIT 1',
+            """
+            SELECT id, payload, attempts FROM outbox
+            WHERE blocked = 0 AND retry_at <= ?
+            ORDER BY rowid LIMIT 1
+            """,
             (now,),
         ).fetchone()
         return Pending(*row) if row else None
@@ -73,8 +76,11 @@ class Store:
     ) -> None:
         with self.db:
             self.db.execute(
-                'UPDATE outbox SET attempts = attempts + 1, error = ?, '
-                'retry_at = ?, blocked = ? WHERE id = ?',
+                """
+                UPDATE outbox
+                SET attempts = attempts + 1, error = ?, retry_at = ?, blocked = ?
+                WHERE id = ?
+                """,
                 (error, retry_at, blocked, session_id),
             )
 
