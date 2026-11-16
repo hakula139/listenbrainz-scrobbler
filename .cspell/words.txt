@@ -35,6 +35,7 @@ shfmt
 smashbits
 smashtunes
 stdenv
+substituters
 taiki
 taplo
 testpaths

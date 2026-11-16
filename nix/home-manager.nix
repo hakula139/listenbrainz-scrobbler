@@ -8,13 +8,14 @@
 
 {
   config,
-  lib,
   pkgs,
+  lib,
   ...
 }:
 
 let
   cfg = config.services.listenbrainz-scrobbler;
+  inherit (pkgs.stdenv.hostPlatform) isDarwin;
   stateDir = "${config.home.homeDirectory}/Library/Application Support/listenbrainz-scrobbler";
 in
 {
@@ -38,35 +39,39 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       {
-        assertion = pkgs.stdenv.isDarwin;
+        assertion = isDarwin;
         message = "ListenBrainz scrobbler requires macOS and Music.app.";
       }
     ];
 
-    home.packages = [ cfg.package ];
+    home = {
+      packages = lib.optional isDarwin cfg.package;
 
-    # launchd opens the log files when it starts the agent, so the state directory must exist first.
-    home.activation.listenbrainzScrobbler =
-      lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "writeBoundary" ]
-        ''
+      # launchd opens log files when starting the agent, so the state directory must exist first.
+      activation = lib.optionalAttrs isDarwin {
+        listenbrainzScrobbler = lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "writeBoundary" ] ''
           run install -d -m 0700 ${lib.escapeShellArg stateDir}
         '';
+      };
+    };
 
-    launchd.agents.listenbrainz-scrobbler = {
-      enable = true;
-      config = {
-        Label = "xyz.hakula.listenbrainz-scrobbler";
-        ProgramArguments = [
-          "${cfg.package}/bin/lb-scrobbler"
-          "run"
-        ];
-        WorkingDirectory = stateDir;
-        RunAtLoad = true;
-        KeepAlive.SuccessfulExit = false;
-        ThrottleInterval = 30;
-        ExitTimeOut = 80;
-        StandardOutPath = "${stateDir}/service.log";
-        StandardErrorPath = "${stateDir}/service.log";
+    launchd.agents = lib.optionalAttrs isDarwin {
+      listenbrainz-scrobbler = {
+        enable = true;
+        config = {
+          Label = "xyz.hakula.listenbrainz-scrobbler";
+          ProgramArguments = [
+            (lib.getExe cfg.package)
+            "run"
+          ];
+          WorkingDirectory = stateDir;
+          RunAtLoad = true;
+          KeepAlive.SuccessfulExit = false;
+          ThrottleInterval = 30;
+          ExitTimeOut = 80;
+          StandardOutPath = "${stateDir}/service.log";
+          StandardErrorPath = "${stateDir}/service.log";
+        };
       };
     };
   };
