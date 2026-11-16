@@ -15,6 +15,7 @@
 
 let
   cfg = config.services.listenbrainz-scrobbler;
+  inherit (lib.hm.dag) entryBetween;
   inherit (pkgs.stdenv.hostPlatform) isDarwin;
   stateDir = "${config.home.homeDirectory}/Library/Application Support/listenbrainz-scrobbler";
 in
@@ -49,7 +50,7 @@ in
 
       # launchd opens log files when starting the agent, so the state directory must exist first.
       activation = lib.optionalAttrs isDarwin {
-        listenbrainzScrobbler = lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "writeBoundary" ] ''
+        listenbrainzScrobbler = entryBetween [ "setupLaunchAgents" ] [ "writeBoundary" ] ''
           run install -d -m 0700 ${lib.escapeShellArg stateDir}
         '';
       };

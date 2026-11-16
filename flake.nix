@@ -48,7 +48,7 @@
       packageFor =
         pkgs:
         let
-          locked = (self.packages.${pkgs.stdenv.hostPlatform.system} or { }).listenbrainz-scrobbler or null;
+          locked = self.packages.${pkgs.stdenv.hostPlatform.system}.listenbrainz-scrobbler or null;
         in
         if
           locked != null
@@ -121,6 +121,9 @@
             enable,
             extraModules ? [ ],
           }:
+          let
+            homeDirectory = if isDarwin then "/Users/scrobbler-test" else "/home/scrobbler-test";
+          in
           home-manager.lib.homeManagerConfiguration {
             pkgs = hmPkgs;
             modules = [
@@ -128,7 +131,7 @@
               {
                 home = {
                   username = "scrobbler-test";
-                  homeDirectory = if isDarwin then "/Users/scrobbler-test" else "/home/scrobbler-test";
+                  inherit homeDirectory;
                   stateVersion = "26.05";
                 };
 
@@ -190,9 +193,10 @@
                 hmPkgs = canaryPkgs;
                 enable = true;
               };
+              enabledPackage = enabledHome.config.services.listenbrainz-scrobbler.package;
             in
             assert extendedPkgs.listenbrainz-scrobbler.drvPath == package.drvPath;
-            assert enabledHome.config.services.listenbrainz-scrobbler.package.drvPath == package.drvPath;
+            assert enabledPackage.drvPath == package.drvPath;
             {
               inherit package;
               home-manager = enabledHome.activationPackage;
@@ -206,12 +210,14 @@
                   enable = true;
                   extraModules = [ { assertions = lib.mkForce [ ]; } ];
                 }).config;
-              failedMessages = map (a: a.message) (builtins.filter (a: !a.assertion) linuxAssertions);
+              failedAssertions = builtins.filter (a: !a.assertion) linuxAssertions;
+              failedMessages = map (a: a.message) failedAssertions;
               drvPaths = ps: map (p: p.drvPath) ps;
+              disabledPackages = drvPaths disabledHome.config.home.packages;
             in
             assert !(extendedPkgs ? listenbrainz-scrobbler);
             assert failedMessages == [ "ListenBrainz scrobbler requires macOS and Music.app." ];
-            assert drvPaths enabledConfig.home.packages == drvPaths disabledHome.config.home.packages;
+            assert drvPaths enabledConfig.home.packages == disabledPackages;
             assert !(enabledConfig.home.activation ? listenbrainzScrobbler);
             assert !(enabledConfig.launchd.agents ? listenbrainz-scrobbler);
             {
