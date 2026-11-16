@@ -14,9 +14,9 @@
 }:
 
 let
-  cfg = config.services.listenbrainz-scrobbler;
   inherit (lib.hm.dag) entryBetween;
   inherit (pkgs.stdenv.hostPlatform) isDarwin;
+  cfg = config.services.listenbrainz-scrobbler;
   stateDir = "${config.home.homeDirectory}/Library/Application Support/listenbrainz-scrobbler";
 in
 {
