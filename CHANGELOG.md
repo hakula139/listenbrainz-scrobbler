@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-18
+
+### Added
+
+- _(nix)_ Use the flake's `overlays.default` to add `pkgs.listenbrainz-scrobbler` to a macOS package set ([#22](https://github.com/hakula139/listenbrainz-scrobbler/pull/22))
+
+### Changed
+
+- _(playback)_ Announce the first track after startup with a single ListenBrainz request. Clear the previous playing-now entry before announcing a repeat of the same title and artist ([#23](https://github.com/hakula139/listenbrainz-scrobbler/pull/23))
+
+### Fixed
+
+- _(playback)_ Handle missing Apple Music stream metadata and retry playing-now updates after HTTP 408 timeouts ([#23](https://github.com/hakula139/listenbrainz-scrobbler/pull/23))
+- _(cli)_ Report `status.json` by name when `lb-scrobbler status` encounters corrupt data or cannot read the file ([#23](https://github.com/hakula139/listenbrainz-scrobbler/pull/23))
+- _(nix)_ Build from the caller's package set for static or cross builds on macOS. Home Manager and the overlay reuse the flake's locked package on matching platforms, even with local Python package overrides ([#22](https://github.com/hakula139/listenbrainz-scrobbler/pull/22))
+- _(nix)_ Report the macOS requirement when the Home Manager service is enabled on Linux ([#22](https://github.com/hakula139/listenbrainz-scrobbler/pull/22))
+
+### Security
+
+- _(deps)_ Remove the `emSign ECC Root CA - G3` certificate from the trust bundles used by the locked Python and Nix environments ([#17](https://github.com/hakula139/listenbrainz-scrobbler/pull/17))
+
+[0.4.0]: https://github.com/hakula139/listenbrainz-scrobbler/compare/v0.3.0...v0.4.0
+
 ## [0.3.0] - 2026-11-02
 
 ### Breaking changes
