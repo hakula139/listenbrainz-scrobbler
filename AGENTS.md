@@ -1,6 +1,6 @@
 # AGENTS.md: listenbrainz-scrobbler
 
-`listenbrainz-scrobbler` is a user LaunchAgent that submits Apple Music listens on macOS to ListenBrainz, installed from PyPI with uv or through the Home Manager module. `CLAUDE.md` is a symlink to this file.
+`listenbrainz-scrobbler` is a user LaunchAgent that submits Apple Music listens on macOS to ListenBrainz, installed from PyPI with uv or through the Home Manager module.
 
 ## Playback and persistence
 

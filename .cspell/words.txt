@@ -1,7 +1,7 @@
 addopts
-autouse
 bootout
 cachix
+capsys
 cooldown
 devkit
 direnv

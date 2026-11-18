@@ -37,19 +37,16 @@ def managed_by_home_manager() -> bool:
     if not PLIST.exists():
         return False
     try:
-        config = plistlib.loads(PLIST.read_bytes())
+        plist = plistlib.loads(PLIST.read_bytes())
     except (ValueError, ExpatError):
         return False
-    if not isinstance(config, dict):
-        return False
-    arguments = config.get('ProgramArguments')
-    if not isinstance(arguments, list) or not arguments:
-        return False
-    program = arguments[0]
-    if not isinstance(program, str):
-        return False
-    program = Path(program)
-    return program.is_relative_to(NIX_STORE) and program.name == HOME_MANAGER_PROGRAM
+
+    match plist:
+        case {'ProgramArguments': [str(program), *_]}:
+            path = Path(program)
+            return path.is_relative_to(NIX_STORE) and path.name == HOME_MANAGER_PROGRAM
+        case _:
+            return False
 
 
 def loaded() -> bool:

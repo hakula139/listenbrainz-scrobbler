@@ -38,7 +38,6 @@
       nixpkgs,
       devkit,
       home-manager,
-      ...
     }:
     let
       inherit (nixpkgs) lib;
@@ -104,64 +103,6 @@
             taplo.enable = true;
           };
         };
-
-        canaryPkgs = pkgs.extend (
-          _: prev: {
-            python313Packages = prev.python313Packages.overrideScope (
-              _: _: {
-                httpx = throw "consumer python313Packages reconstruction";
-              }
-            );
-          }
-        );
-
-        evalHome =
-          {
-            hmPkgs ? pkgs,
-            enable,
-            extraModules ? [ ],
-          }:
-          let
-            homeDirectory = if isDarwin then "/Users/scrobbler-test" else "/home/scrobbler-test";
-          in
-          home-manager.lib.homeManagerConfiguration {
-            pkgs = hmPkgs;
-            modules = [
-              self.homeModules.default
-              {
-                home = {
-                  username = "scrobbler-test";
-                  inherit homeDirectory;
-                  stateVersion = "26.05";
-                };
-
-                services.listenbrainz-scrobbler.enable = enable;
-              }
-            ]
-            ++ extraModules;
-          };
-
-        # Home Manager throws on a failed assertion before exposing `config`, so evaluate the module
-        # without its surrounding modules to read its own entries.
-        linuxAssertions =
-          (lib.evalModules {
-            modules = [
-              self.homeModules.default
-              {
-                options.assertions = lib.mkOption {
-                  type = lib.types.listOf lib.types.unspecified;
-                  default = [ ];
-                };
-              }
-              { _module.check = false; }
-              {
-                _module.args.pkgs = pkgs;
-                services.listenbrainz-scrobbler.enable = true;
-              }
-            ];
-          }).config.assertions;
-
-        extendedPkgs = canaryPkgs.extend self.overlays.default;
       in
       {
         # ------------------------------------------------------------------------------------------
@@ -186,44 +127,7 @@
         # ------------------------------------------------------------------------------------------
         # Checks
         # ------------------------------------------------------------------------------------------
-        checks =
-          if isDarwin then
-            let
-              enabledHome = evalHome {
-                hmPkgs = canaryPkgs;
-                enable = true;
-              };
-              enabledPackage = enabledHome.config.services.listenbrainz-scrobbler.package;
-            in
-            assert extendedPkgs.listenbrainz-scrobbler.drvPath == package.drvPath;
-            assert enabledPackage.drvPath == package.drvPath;
-            {
-              inherit package;
-              home-manager = enabledHome.activationPackage;
-              overlay = pkgs.emptyFile;
-            }
-          else
-            let
-              disabledHome = evalHome { enable = false; };
-              enabledConfig =
-                (evalHome {
-                  enable = true;
-                  extraModules = [ { assertions = lib.mkForce [ ]; } ];
-                }).config;
-              failedAssertions = builtins.filter (a: !a.assertion) linuxAssertions;
-              failedMessages = map (a: a.message) failedAssertions;
-              drvPaths = ps: map (p: p.drvPath) ps;
-              disabledPackages = drvPaths disabledHome.config.home.packages;
-            in
-            assert !(extendedPkgs ? listenbrainz-scrobbler);
-            assert failedMessages == [ "ListenBrainz scrobbler requires macOS and Music.app." ];
-            assert drvPaths enabledConfig.home.packages == disabledPackages;
-            assert !(enabledConfig.home.activation ? listenbrainzScrobbler);
-            assert !(enabledConfig.launchd.agents ? listenbrainz-scrobbler);
-            {
-              home-manager = disabledHome.activationPackage;
-              overlay = pkgs.emptyFile;
-            };
+        checks = import ./nix/checks.nix { inherit pkgs self home-manager; };
 
         # ------------------------------------------------------------------------------------------
         # Formatter
