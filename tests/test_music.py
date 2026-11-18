@@ -60,35 +60,6 @@ def test_parse_streaming_metadata():
             id='non-string-error',
         ),
         pytest.param(
-            {'state': 'playing', 'position': True},
-            'Music returned invalid playback metadata: '
-            'Invalid playback position or duration',
-            id='boolean-position',
-        ),
-        pytest.param(
-            {'state': 'playing', 'duration': -1},
-            'Music returned invalid playback metadata: '
-            'Invalid playback position or duration',
-            id='negative-duration',
-        ),
-        pytest.param(
-            {'state': 'playing', 'position': float('nan')},
-            'Music returned invalid playback metadata: '
-            'Invalid playback position or duration',
-            id='nan-position',
-        ),
-        pytest.param(
-            {'state': 'playing', 'duration': float('inf')},
-            'Music returned invalid playback metadata: '
-            'Invalid playback position or duration',
-            id='infinite-duration',
-        ),
-        pytest.param(
-            {'state': 'playing', 'title': None},
-            'Music returned invalid playback metadata: Invalid metadata',
-            id='non-string-title',
-        ),
-        pytest.param(
             {'error': 'Music Automation access denied (-1743)'},
             'Music Automation access denied (-1743)',
             id='error-passthrough',
@@ -98,6 +69,14 @@ def test_parse_streaming_metadata():
 def test_parse_failures_report_their_cause(data, message):
     with pytest.raises(RuntimeError, match=f'^{re.escape(message)}$'):
         parse_sample(json.dumps(data).encode())
+
+
+@pytest.mark.parametrize(
+    'line', [b'{"state": null}', b'{"state":'], ids=['state', 'json']
+)
+def test_parse_rejects_invalid_state_or_json(line):
+    with pytest.raises(RuntimeError, match='Music returned invalid playback metadata'):
+        parse_sample(line)
 
 
 def test_partial_sample_obeys_deadline(observer_pipe):

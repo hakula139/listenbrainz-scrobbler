@@ -134,9 +134,7 @@ def classify(response: httpx.Response | None, attempts: int) -> Failure:
 class PlayingNowSender:
     """Keep this client's playing-now entry fresh and clear only its own entry.
 
-    ListenBrainz ignores a repeated title/artist update until the entry expires, and a
-    lost response leaves acceptance unknown, so the sender clears and republishes
-    whenever the entry's server expiry is uncertain.
+    ListenBrainz ignores a repeated title/artist update while the entry is live.
     """
 
     def __init__(self, playback: PlaybackState) -> None:
@@ -152,9 +150,6 @@ class PlayingNowSender:
         self.title_artist: tuple[str, str] | None = None
         self.refresh_at = 0.0
 
-        self.announced = False
-        self.synchronized = False
-
     def current_playback(self, now: float) -> Playback | None:
         current = self.playback.current(now)
         generation = current.generation if current else 0
@@ -165,32 +160,31 @@ class PlayingNowSender:
             self.blocked = False
         return current
 
-    def send(self, http: httpx.Client, now: float) -> float:
+    def send(self, http: httpx.Client) -> float:
         """Update or clear fresh playback and return an API-wide cooldown."""
-        began = time.monotonic()
+        now = time.monotonic()
         current = self.current_playback(now)
         if self.blocked or now < self.retry_at:
             return 0
 
         if current is None:
-            return self.clear(http, now) if self.announced else 0
+            return self.clear(http) if self.title_artist is not None else 0
 
-        if not self.synchronized:
-            cooldown = self.clear(http, now)
-            if not self.synchronized:
+        if self.sent_generation == current.generation and now < self.refresh_at:
+            return 0
+
+        if self.title_artist == (current.sample.title, current.sample.artist):
+            cooldown = self.clear(http)
+            if self.title_artist is not None:
                 return cooldown
 
-            now += time.monotonic() - began
-            current = self.current_playback(now)
+            current = self.current_playback(time.monotonic())
             if current is None:
                 return 0
 
-        if self.sent_generation == self.generation and now < self.refresh_at:
-            return 0
-        return self.submit(http, current, now)
+        return self.submit(http, current)
 
-    def submit(self, http: httpx.Client, current: Playback, now: float) -> float:
-        began = time.monotonic()
+    def submit(self, http: httpx.Client, current: Playback) -> float:
         response: httpx.Response | None
         try:
             response = http.post(
@@ -204,25 +198,16 @@ class PlayingNowSender:
             response = None
 
         if response is None or response.status_code != 200:
-            # The server may have accepted the update before the response was lost.
-            if response is None or response.status_code >= 500:
-                self.announced = True
-                self.synchronized = False
-            return self.fail(response, now)
+            return self.fail(response)
 
-        title_artist = (current.sample.title, current.sample.artist)
-        if title_artist != self.title_artist or now >= self.refresh_at:
-            completed = now + (time.monotonic() - began)
-            self.refresh_at = completed + math.ceil(current.sample.duration) + 1
-        self.title_artist = title_artist
-        self.sent_generation = self.generation
+        self.refresh_at = time.monotonic() + math.ceil(current.sample.duration) + 1
+        self.title_artist = (current.sample.title, current.sample.artist)
+        self.sent_generation = current.generation
         self.attempts = 0
-        self.announced = True
         logger.info('Sent playing-now update for session %s', current.session_id)
         return 0
 
-    def clear(self, http: httpx.Client, now: float) -> float:
-        self.synchronized = False
+    def clear(self, http: httpx.Client) -> float:
         response: httpx.Response | None
         try:
             response = http.post(
@@ -232,20 +217,23 @@ class PlayingNowSender:
             response = None
 
         if response is None or response.status_code not in (200, 404):
-            return self.fail(response, now)
+            return self.fail(response)
 
-        self.announced = False
-        self.synchronized = True
         self.title_artist = None
-        self.refresh_at = 0.0
+        self.sent_generation = 0
         logger.info('Cleared playing-now update')
         return 0
 
-    def fail(self, response: httpx.Response | None, now: float) -> float:
+    def fail(self, response: httpx.Response | None) -> float:
         failure = classify(response, self.attempts)
-        self.retry_at = now + failure.retry_in
+        self.retry_at = time.monotonic() + failure.retry_in
         self.attempts += 1
-        self.blocked = failure.blocked
+        self.blocked = (
+            response is not None
+            and response.is_client_error
+            and response.status_code != 408
+            and not failure.cooldown
+        )
         if self.blocked:
             logger.warning('Playing-now update blocked: %s', failure.error)
         else:
@@ -263,7 +251,7 @@ def submit_listens(
     with closing(Store(path)) as store, api_client(token) as http:
         playing = PlayingNowSender(playback)
         while not stop.is_set():
-            delay = playing.send(http, time.monotonic())
+            delay = playing.send(http)
             if not delay and not stop.is_set():
                 delay = send_one(store, http, time.time())
             stop.wait(delay or SAMPLE_INTERVAL)

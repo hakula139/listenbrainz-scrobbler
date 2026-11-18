@@ -42,9 +42,11 @@ jobs:
 
       - name: Set up Nix
         uses: hakula139/devkit/.github/actions/setup-nix@v3
+        with:
+          cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build distributions
-        run: nix develop -c uv build
+        run: nix develop --print-build-logs -c uv build
 
   result:
     name: CI Result

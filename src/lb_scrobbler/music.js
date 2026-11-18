@@ -13,15 +13,15 @@ function snapshot(music) {
   const track = music.currentTrack;
   const sample = {
     state,
-    title: track.name(),
-    artist: track.artist(),
-    album: track.album(),
-    duration: track.duration(),
-    position: music.playerPosition(),
+    title: track.name() || '',
+    artist: track.artist() || '',
+    album: track.album() || '',
+    duration: Math.max(0, track.duration() || 0),
+    position: Math.max(0, music.playerPosition() || 0),
   };
 
   // The track can change between reads, which would mix two tracks' metadata.
-  if (track.name() !== sample.title) {
+  if ((track.name() || '') !== sample.title) {
     return { state: 'unavailable' };
   }
 

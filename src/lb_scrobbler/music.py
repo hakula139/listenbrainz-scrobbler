@@ -1,7 +1,6 @@
 """Read Music.app through a persistent scripting process."""
 
 import json
-import math
 import os
 import select
 import subprocess
@@ -85,16 +84,8 @@ def parse_sample(line: bytes) -> Sample:
             raise RuntimeError(data['error'])
 
         sample = Sample(**data)
-        if not isinstance(sample.state, str) or not all(
-            isinstance(value, str) for value in sample.identity
-        ):
-            raise ValueError('Invalid metadata')
-
-        if not all(
-            type(value) in (int, float) and math.isfinite(value) and value >= 0
-            for value in (sample.duration, sample.position)
-        ):
-            raise ValueError('Invalid playback position or duration')
+        if not isinstance(sample.state, str):
+            raise ValueError('Expected a playback state')
 
         return sample
     except (ValueError, TypeError) as error:

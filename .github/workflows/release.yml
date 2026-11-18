@@ -50,6 +50,9 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: tagged-ci
+    outputs:
+      wheel: ${{ steps.assets.outputs.wheel }}
+      sdist: ${{ steps.assets.outputs.sdist }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -62,20 +65,29 @@ jobs:
 
       - name: Set up Nix
         uses: hakula139/devkit/.github/actions/setup-nix@v3
+        with:
+          cachix_auth_token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build Python distributions
-        run: nix develop -c uv build
+        run: nix develop --print-build-logs -c uv build
 
       - name: Generate checksums
-        working-directory: dist
-        run: sha256sum -- *.whl *.tar.gz > SHA256SUMS
+        id: assets
+        run: |
+          version=$(nix develop -c uv version --short --no-sync)
+          wheel="listenbrainz_scrobbler-${version}-py3-none-any.whl"
+          sdist="listenbrainz_scrobbler-${version}.tar.gz"
+          cd dist
+          sha256sum "$wheel" "$sdist" > SHA256SUMS
+          echo "wheel=$wheel" >> "$GITHUB_OUTPUT"
+          echo "sdist=$sdist" >> "$GITHUB_OUTPUT"
 
       - name: Publish release
         uses: hakula139/devkit/.github/actions/publish-release@v3
         with:
           assets: |
-            dist/*.whl
-            dist/*.tar.gz
+            dist/${{ steps.assets.outputs.wheel }}
+            dist/${{ steps.assets.outputs.sdist }}
             dist/SHA256SUMS
 
   publish-pypi:
@@ -91,7 +103,7 @@ jobs:
       id-token: write
     steps:
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.1.0
+        uses: astral-sh/setup-uv@v10
         with:
           version: '>=0.13'
           enable-cache: false
@@ -99,12 +111,14 @@ jobs:
       - name: Download released distributions
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WHEEL: ${{ needs.publish.outputs.wheel }}
+          SDIST: ${{ needs.publish.outputs.sdist }}
         run: |
           gh release download "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --dir dist \
-            --pattern '*.whl' \
-            --pattern '*.tar.gz' \
+            --pattern "$WHEEL" \
+            --pattern "$SDIST" \
             --pattern SHA256SUMS
 
       - name: Verify checksums

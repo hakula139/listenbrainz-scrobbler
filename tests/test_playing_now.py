@@ -1,33 +1,44 @@
 import json
-import tomllib
 from contextlib import closing, nullcontext
 from dataclasses import replace
-from pathlib import Path
 from unittest.mock import Mock
 
 import httpx
 import pytest
 import support
-from packaging.version import Version
 
 from lb_scrobbler.client import PlayingNowSender, submit_listens
 from lb_scrobbler.playback import PlaybackState
 from lb_scrobbler.store import Store
-from lb_scrobbler.tracking import Tracker
+from lb_scrobbler.tracking import SUBMISSION_CLIENT_VERSION, Tracker
 
 
-with (Path(__file__).parents[1] / 'pyproject.toml').open('rb') as file:
-    PROJECT_VERSION = tomllib.load(file)['project']['version']
+SUBMIT = '/1/submit-listens'
+DELETE = '/1/playing-now/delete'
 
 
-@pytest.fixture(autouse=True)
-def monotonic_clock(monkeypatch):
-    monkeypatch.setattr('lb_scrobbler.client.time.monotonic', lambda: 0)
+@pytest.fixture
+def clock(monkeypatch):
+    clock = Mock(return_value=10)
+    monkeypatch.setattr('lb_scrobbler.client.time.monotonic', clock)
+    return clock
 
 
 @pytest.fixture
 def playback():
     return PlaybackState()
+
+
+@pytest.fixture
+def poll(playback, clock):
+    sender = PlayingNowSender(playback)
+
+    def observe(http, session, now):
+        clock.return_value = now
+        playback.update(session, now)
+        return sender.send(http)
+
+    return observe
 
 
 @pytest.fixture
@@ -45,22 +56,15 @@ def http(requests):
         yield client
 
 
-def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requests):
-    playing = PlayingNowSender(playback)
-    playback.update(support.session(), 10)
-    playing.send(http, 10)
-    playback.update(support.session(), 12)
-    playing.send(http, 12)
+def test_sends_metadata_without_timestamp_once_per_playback(poll, http, requests):
+    current = support.session()
 
-    info = requests[1][1]['payload'][0]['track_metadata']['additional_info']
-    sent_version = info.pop('submission_client_version')
-
-    assert Version(sent_version) == Version(PROJECT_VERSION)
+    poll(http, current, 10)
+    poll(http, current, 12)
 
     assert requests == [
-        ('/1/playing-now/delete', {'client': 'listenbrainz-scrobbler'}),
         (
-            '/1/submit-listens',
+            SUBMIT,
             {
                 'listen_type': 'playing_now',
                 'payload': [
@@ -73,6 +77,7 @@ def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requ
                                 'duration_ms': 120000,
                                 'media_player': 'Apple Music',
                                 'submission_client': 'listenbrainz-scrobbler',
+                                'submission_client_version': SUBMISSION_CLIENT_VERSION,
                             },
                         },
                     }
@@ -82,180 +87,214 @@ def test_sends_metadata_without_timestamp_once_per_playback(playback, http, requ
     ]
 
 
-@pytest.mark.parametrize('state', ['paused', 'unavailable', 'stopped', 'stale'])
-def test_clears_own_notification_when_playback_ends(playback, http, requests, state):
-    playing = PlayingNowSender(playback)
-    playback.update(support.session(), 10)
-    playing.send(http, 10)
-    if state != 'stale':
-        playback.update(support.session(state=state), 12)
-    playing.send(http, 22)
-    playing.send(http, 24)
+@pytest.mark.parametrize(
+    ('changes', 'paths'),
+    [
+        ({}, [SUBMIT, DELETE, SUBMIT]),
+        ({'album': 'Another album'}, [SUBMIT, DELETE, SUBMIT]),
+        ({'artist': 'Another artist'}, [SUBMIT, SUBMIT]),
+        ({'title': 'Another title'}, [SUBMIT, SUBMIT]),
+    ],
+)
+def test_new_session_clears_only_a_matching_title_and_artist(
+    poll, http, requests, changes, paths
+):
+    current = support.session()
+    following = support.session(key='next')
+    following.sample = replace(current.sample, **changes)
 
-    assert requests[-1] == (
-        '/1/playing-now/delete',
-        {'client': 'listenbrainz-scrobbler'},
+    poll(http, current, 10)
+    poll(http, following, 12)
+
+    assert [path for path, _ in requests] == paths
+    assert (
+        requests[-1][1]['payload'][0]['track_metadata'] == following.sample.metadata()
     )
-    assert len(requests) == 3
 
-    playback.update(support.session(), 25)
-    playing.send(http, 25)
 
-    assert requests[-1][1]['listen_type'] == 'playing_now'
-    assert len(requests) == 4
+def test_refresh_waits_for_expiry_from_completion_of_slow_post(poll, clock):
+    operations = []
+    current = support.session()
+
+    def respond(request):
+        operations.append((clock(), request.url.path))
+        if request.url.path == SUBMIT:
+            clock.return_value += 5
+        return httpx.Response(200)
+
+    with support.mock_http(respond) as http:
+        poll(http, current, 10)
+        for now in range(16, 137, 2):
+            poll(http, current, now)
+
+    assert operations == [(10, SUBMIT), (136, DELETE), (136, SUBMIT)]
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_rechecks_playback_after_a_slow_repeat_clear(playback, poll, clock, changed):
+    posted = []
+
+    def respond(request):
+        if request.url.path == DELETE:
+            clock.return_value += 12
+            if changed:
+                playback.update(support.session(title='Next', key='next'), clock())
+        else:
+            metadata = json.loads(request.content)['payload'][0]['track_metadata']
+            posted.append(metadata['track_name'])
+        return httpx.Response(200)
+
+    with support.mock_http(respond) as http:
+        poll(http, support.session(), 10)
+        poll(http, support.session(key='repeat'), 12)
+
+    assert posted == (['Track', 'Next'] if changed else ['Track'])
+
+
+def test_repeat_retries_each_failed_request_without_repeating_a_successful_clear(poll):
+    operations = []
+    outcomes = iter([200, 503, 200, 503, 200])
+    repeated = support.session(key='repeat')
+
+    def respond(request):
+        operations.append(request.url.path)
+        return httpx.Response(next(outcomes))
+
+    with support.mock_http(respond) as http:
+        poll(http, support.session(), 10)
+        for now in range(12, 62, 2):
+            poll(http, repeated, now)
+
+    assert operations == [SUBMIT, DELETE, DELETE, SUBMIT, SUBMIT]
+
+
+@pytest.mark.parametrize('state', ['paused', 'unavailable', 'stopped', 'stale'])
+def test_clears_own_notification_once_and_announces_on_resume(
+    playback, http, requests, clock, state
+):
+    playing = PlayingNowSender(playback)
+    current = support.session()
+    playback.update(current, clock())
+    playing.send(http)
+
+    clock.return_value = 22
+    if state != 'stale':
+        playback.update(support.session(state=state), clock())
+    playing.send(http)
+    playing.send(http)
+    playback.update(current, clock())
+    playing.send(http)
+
+    assert [path for path, _ in requests] == [SUBMIT, DELETE, SUBMIT]
+    assert requests[1][1] == {'client': 'listenbrainz-scrobbler'}
 
 
 def test_startup_without_fresh_playback_does_not_clear_other_clients(
-    playback, http, requests
+    playback, http, requests, clock
 ):
     playing = PlayingNowSender(playback)
-    playing.send(http, 10)
-    playback.update(support.session(), 12)
-    playing.send(http, 23)
+
+    playing.send(http)
+    playback.update(support.session(), clock())
+    clock.return_value += 11
+    playing.send(http)
 
     assert requests == []
 
 
-def test_repeat_and_album_change_preserve_server_expiry(playback, http, requests):
-    playing = PlayingNowSender(playback)
-    playback.update(support.session(), 10)
-    playing.send(http, 10)
-    repeated = support.session(key='repeat')
-    repeated.sample = replace(repeated.sample, album='Another album')
-    playback.update(repeated, 120)
-    playing.send(http, 120)
-    playback.update(repeated, 130)
-    playing.send(http, 130)
-    assert len(requests) == 3
-
-    playback.update(repeated, 131)
-    playing.send(http, 131)
-
-    assert len(requests) == 4
-    assert (
-        requests[-1][1]['payload'][0]['track_metadata']['release_name']
-        == 'Another album'
-    )
-
-
-def test_blocked_playback_resumes_only_for_a_new_session(playback):
-    paths = []
+@pytest.mark.parametrize('status', [None, 408, 503])
+def test_submission_retries_directly_with_bounded_backoff(poll, clock, status):
+    operations = []
+    current = support.session()
 
     def respond(request):
-        paths.append(request.url.path)
-        if request.url.path.endswith('/playing-now/delete'):
-            return httpx.Response(200)
-        return httpx.Response(400)
+        operations.append((clock(), request.url.path))
+        if status is None:
+            raise httpx.ReadTimeout('response lost', request=request)
+        return httpx.Response(status)
 
-    playing = PlayingNowSender(playback)
     with support.mock_http(respond) as http:
-        for now in range(10, 62, 2):
-            playback.update(support.session(), now)
-            playing.send(http, now)
+        for now in range(10, 3090, 10):
+            poll(http, current, now)
+        poll(http, None, 3090)
 
-        assert paths.count('/1/submit-listens') == 1
-
-        playback.update(support.session(title='Next', key='next'), 62)
-        playing.send(http, 62)
-
-    assert paths.count('/1/submit-listens') == 2
-
-
-def test_failed_old_track_is_replaced_and_current_failure_backs_off(playback):
-    sent = []
-
-    def respond(request):
-        if request.url.path.endswith('/playing-now/delete'):
-            return httpx.Response(200)
-        sent.append(
-            json.loads(request.content)['payload'][0]['track_metadata']['track_name']
-        )
-        return httpx.Response(503)
-
-    playing = PlayingNowSender(playback)
-    with support.mock_http(respond) as http:
-        playback.update(support.session(), 10)
-        assert playing.send(http, 10) == 0
-        playback.update(support.session(), 12)
-        playing.send(http, 12)
-        playback.update(support.session(title='Next', key='next'), 14)
-        playing.send(http, 14)
-        playback.update(support.session(title='Next', key='next'), 24)
-        playing.send(http, 24)
-
-    assert sent == ['Track', 'Next', 'Next']
-
-
-def test_uncertain_submission_is_cleared_but_failed_clear_is_superseded(playback):
-    paths = []
-
-    def disconnect(request):
-        paths.append(request.url.path)
-        if request.url.path.endswith('/playing-now/delete') and len(paths) != 3:
-            return httpx.Response(200)
-        raise httpx.ReadTimeout('timeout', request=request)
-
-    playing = PlayingNowSender(playback)
-    with support.mock_http(disconnect) as http:
-        playback.update(support.session(), 10)
-        playing.send(http, 10)
-        playback.update(None, 12)
-        playing.send(http, 12)
-        playback.update(support.session(title='Next', key='next'), 14)
-        playing.send(http, 14)
-
-    assert paths == [
-        '/1/playing-now/delete',
-        '/1/submit-listens',
-        '/1/playing-now/delete',
-        '/1/playing-now/delete',
-        '/1/submit-listens',
+    assert operations == [
+        (now, SUBMIT) for now in [10, 20, 40, 80, 160, 320, 640, 1280, 2180, 3080]
     ]
 
 
-def test_clear_accepts_404_when_another_client_owns_notification(playback):
-    paths = []
+@pytest.mark.parametrize('status', [400, 503])
+def test_new_track_supersedes_rejection_or_backoff(poll, status):
+    sent = []
 
     def respond(request):
-        paths.append(request.url.path)
-        return httpx.Response(404 if len(paths) == 3 else 200)
+        sent.append(json.loads(request.content)['payload'][0]['track_metadata'])
+        return httpx.Response(status)
 
-    playing = PlayingNowSender(playback)
+    current = support.session()
+    following = support.session(title='Next', key='next')
     with support.mock_http(respond) as http:
-        playback.update(support.session(), 10)
-        playing.send(http, 10)
-        playback.update(None, 12)
-        playing.send(http, 12)
+        poll(http, current, 10)
+        poll(http, current, 12)
+        poll(http, following, 14)
+        poll(http, following, 24)
 
-        playback.update(support.session(title='Next', key='next'), 102)
-        playing.send(http, 102)
+    assert [track['track_name'] for track in sent] == (
+        ['Track', 'Next'] if status == 400 else ['Track', 'Next', 'Next']
+    )
 
-    assert paths == [
-        '/1/playing-now/delete',
-        '/1/submit-listens',
-        '/1/playing-now/delete',
-        '/1/submit-listens',
+
+@pytest.mark.parametrize(
+    ('status', 'deletions'),
+    [(400, [12]), (404, [12]), (408, [12, 24, 46]), (503, [12, 24, 46])],
+)
+def test_clear_failure_policy_and_recovery_on_track_change(
+    poll, clock, status, deletions
+):
+    operations = []
+
+    def respond(request):
+        operations.append((clock(), request.url.path))
+        if request.url.path == DELETE:
+            clock.return_value += 2
+        return httpx.Response(status if request.url.path == DELETE else 200)
+
+    with support.mock_http(respond) as http:
+        poll(http, support.session(), 10)
+        for now in range(12, 62, 2):
+            poll(http, None, now)
+        resumed = (
+            support.session()
+            if status == 404
+            else support.session(title='Next', key='next')
+        )
+        poll(http, resumed, 62)
+
+    assert operations == [
+        (10, SUBMIT),
+        *((now, DELETE) for now in deletions),
+        (62, SUBMIT),
     ]
 
 
 @pytest.mark.parametrize(('status', 'cooldown'), [(429, 90), (401, 300)])
-@pytest.mark.parametrize('endpoint', ['submit-listens', 'playing-now/delete'])
+@pytest.mark.parametrize('endpoint', [SUBMIT, DELETE])
 def test_worker_applies_shared_cooldown_before_queued_listens(
-    tmp_path, playback, monkeypatch, status, cooldown, endpoint
+    tmp_path, playback, monkeypatch, clock, status, cooldown, endpoint
 ):
     def respond(request):
         return httpx.Response(
-            status if request.url.path.endswith(endpoint) else 200,
+            status if request.url.path == endpoint else 200,
             headers={'Retry-After': '90'},
         )
 
-    playback.update(support.session(), 10)
-    queued = Mock()
+    playback.update(support.session(), clock())
+    queued = Mock(return_value=0)
     stop = Mock()
-    stop.is_set.side_effect = [False, True]
-    monkeypatch.setattr('lb_scrobbler.client.time.monotonic', lambda: 10)
+    cycles = 1 if endpoint == SUBMIT else 2
+    stop.is_set.side_effect = lambda: stop.wait.call_count >= cycles
+    stop.wait.side_effect = lambda _: playback.update(None, clock())
     monkeypatch.setattr('lb_scrobbler.client.send_one', queued)
-
     with support.mock_http(respond) as http:
         monkeypatch.setattr(
             'lb_scrobbler.client.api_client', lambda _: nullcontext(http)
@@ -263,34 +302,10 @@ def test_worker_applies_shared_cooldown_before_queued_listens(
 
         submit_listens(tmp_path / 'state.sqlite3', 'test-token', stop, playback)
 
-    queued.assert_not_called()
-    stop.wait.assert_called_once_with(cooldown)
-
-
-def test_refresh_waits_for_server_expiry_after_slow_request(playback, monkeypatch):
-    clock = [0]
-    posted = []
-    monkeypatch.setattr('lb_scrobbler.client.time.monotonic', lambda: clock[0])
-
-    def respond(request):
-        if request.url.path.endswith('/submit-listens'):
-            posted.append(json.loads(request.content))
-            clock[0] += 5
-        return httpx.Response(200)
-
-    playing = PlayingNowSender(playback)
-    with support.mock_http(respond) as http:
-        playback.update(support.session(), 10)
-        playing.send(http, 10)
-        for now in range(12, 132, 2):
-            playback.update(support.session(), now)
-        playing.send(http, 131)
-        assert len(posted) == 1
-
-        playback.update(support.session(), 136)
-        playing.send(http, 136)
-
-    assert len(posted) == 2
+    assert queued.call_count == (0 if endpoint == SUBMIT else 1)
+    assert [call.args[0] for call in stop.wait.call_args_list] == (
+        [cooldown] if endpoint == SUBMIT else [2, cooldown]
+    )
 
 
 def test_queued_network_backoff_does_not_delay_next_track(
@@ -304,8 +319,6 @@ def test_queued_network_backoff_does_not_delay_next_track(
     sent = []
 
     def respond(request):
-        if request.url.path.endswith('/playing-now/delete'):
-            return httpx.Response(200)
         payload = json.loads(request.content)
         sent.append(
             (
@@ -345,97 +358,3 @@ def test_queued_network_backoff_does_not_delay_next_track(
     with closing(Store(store_path)) as store:
         assert store.next(2009) is None
         assert json.loads(store.next(2010).payload)['listened_at'] == 1000
-
-
-@pytest.mark.parametrize('failure', [None, 'transport', 'server'])
-def test_unknown_existing_expiry_is_reset_before_publishing(
-    playback, monkeypatch, failure
-):
-    clock = [60.0]
-    cached = {'expires_at': 120.0, 'failure': failure}
-    operations = []
-    monkeypatch.setattr('lb_scrobbler.client.time.monotonic', lambda: clock[0])
-
-    def respond(request):
-        if request.url.path.endswith('/playing-now/delete'):
-            assert json.loads(request.content) == {'client': 'listenbrainz-scrobbler'}
-            cached['expires_at'] = 0
-            operations.append('delete')
-            return httpx.Response(200)
-
-        operations.append('submit')
-        # Match the server: a duplicate succeeds without refreshing expiry.
-        if clock[0] >= cached['expires_at']:
-            cached['expires_at'] = clock[0] + 120
-        outcome = cached['failure']
-        cached['failure'] = None
-        if outcome == 'transport':
-            raise httpx.ReadTimeout('response lost', request=request)
-        if outcome == 'server':
-            return httpx.Response(503)
-        return httpx.Response(200)
-
-    playing = PlayingNowSender(playback)
-    with support.mock_http(respond) as http:
-        for now in range(60, 304, 2):
-            clock[0] = now
-            playback.update(support.session(), now)
-            playing.send(http, now)
-            if now > 70:
-                # Two-second polling allows a brief interval at the TTL boundary.
-                assert cached['expires_at'] >= now - 2
-
-    assert operations[:2] == ['delete', 'submit']
-    if failure:
-        assert operations[:4] == ['delete', 'submit', 'delete', 'submit']
-
-
-@pytest.mark.parametrize('failure', ['transport', 'server'])
-def test_resynchronizing_unknown_acceptance_preserves_exponential_backoff(
-    playback, failure
-):
-    submitted_at = []
-    clock = [10]
-
-    def respond(request):
-        if request.url.path.endswith('/playing-now/delete'):
-            return httpx.Response(200)
-        submitted_at.append(clock[0])
-        if failure == 'transport':
-            raise httpx.ReadTimeout('response lost', request=request)
-        return httpx.Response(503)
-
-    playing = PlayingNowSender(playback)
-    with support.mock_http(respond) as http:
-        for now in range(10, 82, 2):
-            clock[0] = now
-            playback.update(support.session(), now)
-            playing.send(http, now)
-
-    assert submitted_at == [10, 20, 40, 80]
-
-
-@pytest.mark.parametrize('changed', [False, True])
-def test_rechecks_current_playback_after_blocking_initial_clear(
-    playback, monkeypatch, changed
-):
-    clock = [10]
-    submitted = []
-    monkeypatch.setattr('lb_scrobbler.client.time.monotonic', lambda: clock[0])
-
-    def respond(request):
-        if request.url.path.endswith('/playing-now/delete'):
-            clock[0] = 22
-            if changed:
-                playback.update(support.session(title='Next', key='next'), clock[0])
-        else:
-            metadata = json.loads(request.content)['payload'][0]['track_metadata']
-            submitted.append(metadata['track_name'])
-        return httpx.Response(200)
-
-    playing = PlayingNowSender(playback)
-    with support.mock_http(respond) as http:
-        playback.update(support.session(), 10)
-        playing.send(http, 10)
-
-    assert submitted == (['Next'] if changed else [])

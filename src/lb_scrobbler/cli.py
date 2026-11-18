@@ -4,6 +4,7 @@ import argparse
 import getpass
 import json
 import logging
+import math
 import os
 import plistlib
 import time
@@ -77,11 +78,23 @@ def authenticate(from_smashtunes: bool) -> None:
 
 def print_status() -> None:
     status_path = service.STATE / service.STATUS
-    status = json.loads(status_path.read_text()) if status_path.exists() else {}
-    status['agent_loaded'] = service.loaded()
-    if 'updated_at' in status:
-        status['observation_age_seconds'] = round(time.time() - status['updated_at'], 1)
+    try:
+        status = json.loads(status_path.read_text(encoding='utf-8'))
+        if not isinstance(status, dict):
+            raise ValueError
+        if 'updated_at' in status:
+            updated_at = status['updated_at']
+            if type(updated_at) not in (int, float) or not math.isfinite(updated_at):
+                raise ValueError
+            status['observation_age_seconds'] = round(time.time() - updated_at, 1)
+    except FileNotFoundError:
+        status = {}
+    except OSError as error:
+        raise RuntimeError(f'Cannot read {service.STATUS}') from error
+    except (OverflowError, ValueError) as error:
+        raise RuntimeError(f'Invalid status data in {service.STATUS}') from error
 
+    status['agent_loaded'] = service.loaded()
     print(json.dumps(status, ensure_ascii=False, indent=2))
 
 

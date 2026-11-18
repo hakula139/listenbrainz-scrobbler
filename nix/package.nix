@@ -9,8 +9,9 @@
 
 let
   inherit (lib.importTOML ../pyproject.toml) project;
+  pyPkgs = python313Packages;
 in
-python313Packages.buildPythonApplication {
+pyPkgs.buildPythonApplication {
   pname = project.name;
   inherit (project) version;
   pyproject = true;
@@ -26,17 +27,16 @@ python313Packages.buildPythonApplication {
     ];
   };
 
-  build-system = [ python313Packages.hatchling ];
+  build-system = [ pyPkgs.hatchling ];
 
-  dependencies = with python313Packages; [
-    httpx
-    keyring
+  dependencies = [
+    pyPkgs.httpx
+    pyPkgs.keyring
   ];
 
   nativeCheckInputs = [
-    python313Packages.packaging
-    python313Packages.pytest-cov-stub
-    python313Packages.pytestCheckHook
+    pyPkgs.pytest-cov-stub
+    pyPkgs.pytestCheckHook
   ];
   pythonImportsCheck = [ "lb_scrobbler" ];
 
