@@ -5,6 +5,13 @@
 {
   description = "listenbrainz-scrobbler packages and development environment";
 
+  nixConfig = {
+    extra-substituters = [ "https://hakula.cachix.org" ];
+    extra-trusted-public-keys = [
+      "hakula.cachix.org-1:7zwB3fhMfReHdOjh6DmnaLXgqbPDBcojvN9F+osZw0k="
+    ];
+  };
+
   # ------------------------------------------------------------------------------------------------
   # Inputs
   # ------------------------------------------------------------------------------------------------
@@ -36,15 +43,36 @@
     let
       inherit (nixpkgs) lib;
 
-      packageFor = pkgs: pkgs.callPackage ./nix/package.nix { };
+      platformKey = p: { inherit (p) config isStatic; };
+
+      packageFor =
+        pkgs:
+        let
+          locked = self.packages.${pkgs.stdenv.hostPlatform.system}.listenbrainz-scrobbler or null;
+        in
+        if
+          locked != null
+          && platformKey pkgs.stdenv.buildPlatform == platformKey locked.stdenv.buildPlatform
+          && platformKey pkgs.stdenv.hostPlatform == platformKey locked.stdenv.hostPlatform
+          && pkgs.stdenv.hostPlatform == pkgs.stdenv.targetPlatform
+        then
+          locked
+        else
+          pkgs.callPackage ./nix/package.nix { };
 
       # A key lets the module system deduplicate the module when it is imported twice.
       homeModuleKey = "${self}/flake.nix#homeModules.default";
     in
     # ----------------------------------------------------------------------------------------------
-    # Home Manager Module
+    # Overlay and Home Manager Module
     # ----------------------------------------------------------------------------------------------
     {
+      overlays.default =
+        _: prev:
+        lib.optionalAttrs prev.stdenv.hostPlatform.isDarwin {
+          listenbrainz-scrobbler = packageFor prev;
+        };
+
       homeModules.default = {
         _class = "homeManager";
         _file = homeModuleKey;
@@ -57,9 +85,9 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         dk = devkit.lib.mkLib pkgs;
-        inherit (pkgs.stdenv) isDarwin;
+        inherit (pkgs.stdenv.hostPlatform) isDarwin;
 
-        package = packageFor pkgs;
+        package = pkgs.callPackage ./nix/package.nix { };
 
         # ------------------------------------------------------------------------------------------
         # Pre-commit Hooks
@@ -77,21 +105,63 @@
           };
         };
 
-        moduleCheck = home-manager.lib.homeManagerConfiguration {
-          inherit pkgs;
-          modules = [
-            self.homeModules.default
-            {
-              home = {
-                username = "scrobbler-test";
-                homeDirectory = "/Users/scrobbler-test";
-                stateVersion = "26.05";
-              };
+        canaryPkgs = pkgs.extend (
+          _: prev: {
+            python313Packages = prev.python313Packages.overrideScope (
+              _: _: {
+                httpx = throw "consumer python313Packages reconstruction";
+              }
+            );
+          }
+        );
 
-              services.listenbrainz-scrobbler.enable = true;
-            }
-          ];
-        };
+        evalHome =
+          {
+            hmPkgs ? pkgs,
+            enable,
+            extraModules ? [ ],
+          }:
+          let
+            homeDirectory = if isDarwin then "/Users/scrobbler-test" else "/home/scrobbler-test";
+          in
+          home-manager.lib.homeManagerConfiguration {
+            pkgs = hmPkgs;
+            modules = [
+              self.homeModules.default
+              {
+                home = {
+                  username = "scrobbler-test";
+                  inherit homeDirectory;
+                  stateVersion = "26.05";
+                };
+
+                services.listenbrainz-scrobbler.enable = enable;
+              }
+            ]
+            ++ extraModules;
+          };
+
+        # Home Manager throws on a failed assertion before exposing `config`, so evaluate the module
+        # without its surrounding modules to read its own entries.
+        linuxAssertions =
+          (lib.evalModules {
+            modules = [
+              self.homeModules.default
+              {
+                options.assertions = lib.mkOption {
+                  type = lib.types.listOf lib.types.unspecified;
+                  default = [ ];
+                };
+              }
+              { _module.check = false; }
+              {
+                _module.args.pkgs = pkgs;
+                services.listenbrainz-scrobbler.enable = true;
+              }
+            ];
+          }).config.assertions;
+
+        extendedPkgs = canaryPkgs.extend self.overlays.default;
       in
       {
         # ------------------------------------------------------------------------------------------
@@ -116,10 +186,44 @@
         # ------------------------------------------------------------------------------------------
         # Checks
         # ------------------------------------------------------------------------------------------
-        checks = lib.optionalAttrs isDarwin {
-          inherit package;
-          home-manager = moduleCheck.activationPackage;
-        };
+        checks =
+          if isDarwin then
+            let
+              enabledHome = evalHome {
+                hmPkgs = canaryPkgs;
+                enable = true;
+              };
+              enabledPackage = enabledHome.config.services.listenbrainz-scrobbler.package;
+            in
+            assert extendedPkgs.listenbrainz-scrobbler.drvPath == package.drvPath;
+            assert enabledPackage.drvPath == package.drvPath;
+            {
+              inherit package;
+              home-manager = enabledHome.activationPackage;
+              overlay = pkgs.emptyFile;
+            }
+          else
+            let
+              disabledHome = evalHome { enable = false; };
+              enabledConfig =
+                (evalHome {
+                  enable = true;
+                  extraModules = [ { assertions = lib.mkForce [ ]; } ];
+                }).config;
+              failedAssertions = builtins.filter (a: !a.assertion) linuxAssertions;
+              failedMessages = map (a: a.message) failedAssertions;
+              drvPaths = ps: map (p: p.drvPath) ps;
+              disabledPackages = drvPaths disabledHome.config.home.packages;
+            in
+            assert !(extendedPkgs ? listenbrainz-scrobbler);
+            assert failedMessages == [ "ListenBrainz scrobbler requires macOS and Music.app." ];
+            assert drvPaths enabledConfig.home.packages == disabledPackages;
+            assert !(enabledConfig.home.activation ? listenbrainzScrobbler);
+            assert !(enabledConfig.launchd.agents ? listenbrainz-scrobbler);
+            {
+              home-manager = disabledHome.activationPackage;
+              overlay = pkgs.emptyFile;
+            };
 
         # ------------------------------------------------------------------------------------------
         # Formatter

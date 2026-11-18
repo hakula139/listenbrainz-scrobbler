@@ -35,7 +35,9 @@ jobs:
       - name: Check the package version
         run: |
           version=$(
-            python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])'
+            python3 -c \
+              'import sys, tomllib; print(tomllib.load(sys.stdin.buffer)["project"]["version"])' \
+              < pyproject.toml
           )
           if [[ "v$version" != "$GITHUB_REF_NAME" ]]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match the package version $version"
@@ -91,7 +93,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.1.0
         with:
-          version: '0.12.13'
+          version: '>=0.13'
           enable-cache: false
 
       - name: Download released distributions
